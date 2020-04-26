@@ -11,8 +11,8 @@
 
 #ifdef _MSC_VER
 #include <float.h>
-#define isnan    _isnan
-#define isinf(x) (!_finite(x))
+//#define isnan    _isnan
+//#define isinf(x) (!_finite(x))
 #pragma warning(disable:4996)
 #else
 #define stricmp  strcasecmp

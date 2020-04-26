@@ -47,6 +47,17 @@
 
 extern uint32_t due_storagesize;
 
+class SPIGuard
+{
+public:
+  SPIGuard();
+  ~SPIGuard();
+  
+private:
+  bool m_hlda;
+  bool m_prot;
+  bool m_memr;
+};
 
 // ------------------------------------------ switches
 

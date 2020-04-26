@@ -468,16 +468,18 @@ void host_interrupt_timer_setup(byte tid, uint32_t period_us, TimerFnTp f)
 //------------------------------------------------------------------------------------------------------
 
 
-class HLDAGuard
-{
-public:
-  HLDAGuard()  { m_hlda = (host_read_status_leds() & ST_HLDA)!=0; }
-  ~HLDAGuard() { if( m_hlda ) host_set_status_led_HLDA(); else host_clr_status_led_HLDA(); }
-  
-private:
-  bool m_hlda;
-};
 
+SPIGuard::SPIGuard()  { m_hlda = (host_read_status_leds() & ST_HLDA)!=0;
+                 host_set_status_led_HLDA();
+                 m_prot = (host_read_status_leds() & ST_PROT)!=0;
+                 host_set_status_led_PROT();
+                 m_memr = (host_read_status_leds() & ST_MEMR)!=0; 
+                 host_set_status_led_MEMR();
+                 }
+SPIGuard::~SPIGuard() { if( m_hlda ) host_set_status_led_HLDA(); else host_clr_status_led_HLDA(); 
+                 if( m_prot ) host_set_status_led_PROT(); else host_clr_status_led_PROT();
+                 if( m_hlda ) host_set_status_led_MEMR(); else host_clr_status_led_MEMR();}
+  
 
 // The Due has 512k FLASH memory (addresses 0x00000-0x7ffff).
 // We use 16k (0x4000 bytes) for storage
@@ -552,7 +554,7 @@ static void host_storage_read_flash(void *data, uint32_t addr, uint32_t len)
 
 static void host_storage_write_sd(const void *data, uint32_t addr, uint32_t len)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   if( host_filesys_file_seek(storagefile, addr) )
     {
       storagefile.write((byte *) data, len);
@@ -563,7 +565,7 @@ static void host_storage_write_sd(const void *data, uint32_t addr, uint32_t len)
 
 static void host_storage_read_sd(void *data, uint32_t addr, uint32_t len)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   if( storagefile.seek(addr) )
     storagefile.read((byte *) data, len);
 }
@@ -625,28 +627,28 @@ void host_storage_move(uint32_t to, uint32_t from, uint32_t len)
 
 File host_filesys_file_open(const char *filename, bool write)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   return SD.open(filename, write ? FILE_WRITE : FILE_READ);
 }
 
 
 uint32_t host_filesys_file_read(File &f, uint32_t len, void *buffer)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   return f.read((uint8_t *) buffer, len);
 }
 
 
 uint32_t host_filesys_file_write(File &f, uint32_t len, const void *buffer)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   return f.write((const uint8_t *) buffer, len);
 }
 
 
 uint32_t host_filesys_file_set(File &f, uint32_t len, byte b)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   uint32_t res = 0;
 
   // write data in MOVE_BUFFER_SIZE chunks
@@ -660,14 +662,14 @@ uint32_t host_filesys_file_set(File &f, uint32_t len, byte b)
 
 void host_filesys_file_flush(File &f)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   f.flush();
 }
 
 
 bool host_filesys_file_seek(File &f, uint32_t pos)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
 
   f.seek(pos);
   if( f.position()<pos && !f.isReadOnly() )
@@ -683,28 +685,28 @@ bool host_filesys_file_seek(File &f, uint32_t pos)
 
 uint32_t host_filesys_file_pos(File &f)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   return f.position();
 }
 
 
 bool host_filesys_file_eof(File &f)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   return f.isReadOnly() ? f.available()==0 : false;
 }
 
 
 void host_filesys_file_close(File &f)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   f.close();
 }
 
 
 uint32_t host_filesys_file_size(const char *filename)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   int res = -1;
       
   File f = SD.open(filename, FILE_READ);
@@ -720,35 +722,35 @@ uint32_t host_filesys_file_size(const char *filename)
 
 bool host_filesys_file_exists(const char *filename)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   return SD.exists(filename);
 }
 
 
 bool host_filesys_file_remove(const char *filename)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   return SD.remove(filename);
 }
 
 
 bool host_filesys_file_rename(const char *from, const char *to)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   return SD.rename(from, to);
 }
 
 
 File host_filesys_dir_open()
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   return SD.open("/");
 }
 
 
 const char *host_filesys_dir_nextfile(File &d)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   static char buffer[15];
 
   while( true )
@@ -773,14 +775,14 @@ const char *host_filesys_dir_nextfile(File &d)
 
 void host_filesys_dir_rewind(File &d)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   d.rewindDirectory();
 }
 
 
 void host_filesys_dir_close(File &d)
 {
-  HLDAGuard hlda;
+  SPIGuard spi;
   d.close();
 }
 
@@ -1823,7 +1825,7 @@ void host_setup()
 
 #if NUM_DRIVES>0 || NUM_HDSK_UNITS>0 || USE_HOST_FILESYS>0
   // check if SD card available (send "chip select" signal to HLDA status light)
-  HLDAGuard hlda;
+  SPIGuard spi;
   // SdInfo.h in the SdFat library says: Set SCK rate to F_CPU/3 (SPI_DIV3_SPEED) for Due
   // (84MHZ/3 = 28MHz). If that fails try 4MHz and if that fails too then fall back to 250Khz.
   // If neither of those work then something is seriously wrong.

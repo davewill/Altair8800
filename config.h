@@ -17,7 +17,7 @@
 // If this is set to 1 and the host provides a file system (i.e. an SD card is connected)
 // then store configurations and other data directly on the hosts' file system,
 // Otherwise those items are stored in a persistent memory block using our own mini-filesystem
-#define USE_HOST_FILESYS 0
+#define USE_HOST_FILESYS 1
 
 
 // Allowing breakpoints significantly reduces performance but is helpful
@@ -71,8 +71,8 @@
 // Enables support for Cromemco Dazzler. Note that to actually see the
 // Dazzler picture you need to connect a client. See:
 // https://www.hackster.io/david-hansel/dazzler-display-for-altair-simulator-3febc6
-#define USE_DAZZLER 0
-
+#define USE_DAZZLER 1
+#define DAZZLCD 1
 
 // Enables support for Processor Technology VDM-1. Note that to actually see the
 // VDM-1 picture you need to connect to a client. See:
@@ -119,7 +119,7 @@
 // If enabled, Address switch state will be set by issuing the '/'
 // serial command.  Actual switches will be ignored.
 // Useful when operating while not connected to the front panel hardware.
-#define STANDALONE 0
+#define STANDALONE 1
 
 
 

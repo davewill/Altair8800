@@ -62,15 +62,108 @@ void dazzler_setup() {}
 #define FEAT_KEYBAORD 0x20
 #define FEAT_FRAMEBUF 0x40
 
-#define DEBUGLVL 0
+#define DEBUGLVL 2
 
 byte dazzler_iface = 0xff;
 int  dazzler_client_version = -1;
 uint16_t dazzler_client_features = 0;
 uint32_t dazzler_vsync_cycles = 0;
 
+static byte ctrlport = 0x00;
+static byte pictport = 0x00;
+
 uint16_t dazzler_mem_addr1, dazzler_mem_addr2, dazzler_mem_start, dazzler_mem_end, dazzler_mem_size;
 volatile byte d7a_port[5] = {0xff, 0x00, 0x00, 0x00, 0x00};
+
+#ifdef DAZZLCD>0
+#include "SPI.h"
+#include "Adafruit_GFX.h"
+#include "Adafruit_ILI9341.h"
+
+  // Use SPI
+  #define TFT_CS   13
+  #define TFT_DC   9
+  //#define SD_CS    22
+  Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC);
+
+const int16_t
+  pixelWidth  = 320,  // TFT dimensions
+  pixelHeight = 240;
+
+const int16_t tftColor(int8_t v)
+{
+  int i = v & 0x08;
+  return tft.color565(((v & 0x01) ? 0xff : 0) / (i ? 1 : 2),
+                      ((v & 0x02) ? 0xff : 0) / (i ? 1 : 2),
+                      ((v & 0x04) ? 0xff : 0) / (i ? 1 : 2));
+}
+void getXY(uint16_t a, uint8_t &x, uint8_t &y)
+{
+  uint16_t qa = a % 512;
+
+  x = 2*(qa % 16);
+  y = (qa / 16);
+  if (a < 512) {
+    // X and Y are right
+  }
+  else if (a < 1024) {
+    x = x + 32;
+  }
+  else if (a < 1536) {
+    y = y + 32;
+  }
+  else {
+    x = x + 32;
+    y = y + 32;
+  }
+}
+
+static void dazzler_lcd_write_mem(uint16_t a, byte v)
+{
+    SPIGuard spi;
+    int faddr = a-dazzler_mem_addr1;
+    uint8_t x, y;
+    getXY(faddr, x, y);
+    tft.fillRect(4*x*240/256, 4*y*240/256, 4, 4, tftColor(v&0x0F));
+    tft.fillRect(4*(x+1)*240/256, 4*y*240/256, 4, 4, tftColor(v>>4));
+#if DEBUGLVL>2
+  printf("tft.drawPixel(%u, %u, %04x)\r\n", x, y, tftColor(v>>4));
+#endif
+}
+
+
+static void dazzler_lcd_full_redraw(uint8_t buffer_flag, uint16_t addr)
+{
+    SPIGuard spi;
+    int faddr = addr;
+    uint8_t c, x, y;
+    uint16_t a = (ctrlport & 0x7f) << 9;
+
+#if DEBUGLVL>1
+  printf("dazzler_lcd_full_draw(%i, %04X)\n", buffer_flag, addr);
+#endif
+
+    if (addr == a)
+    {
+      for (y = 0; y < 32; y++) {
+        for (x = 0; x < 32; x+= 2, addr++) {
+          uint8_t v = *(Mem+addr);
+          tft.fillRect(4*x*240/256, 4*y*240/256, 4, 4, tftColor(v&0x0F));
+          tft.fillRect(4*(x+1)*240/256, 4*y*240/256, 4, 4, tftColor(v>>4));
+          v = *(Mem+addr+512);
+          tft.fillRect(4*(x+32)*240/256, 4*y*240/256, 4, 4, tftColor(v&0x0F));
+          tft.fillRect(4*(x+33)*240/256, 4*y*240/256, 4, 4, tftColor(v>>4));
+          v = *(Mem+addr+1024);
+          tft.fillRect(4*x*240/256, 4*(y+32)*240/256, 4, 4, tftColor(v&0x0F));
+          tft.fillRect(4*(x+1)*240/256, 4*(y+32)*240/256, 4, 4, tftColor(v>>4));
+          v = *(Mem+addr+1536);
+          tft.fillRect(4*(x+32)*240/256, 4*(y+32)*240/256, 4, 4, tftColor(v&0x0F));
+          tft.fillRect(4*(x+33)*240/256, 4*(y+32)*240/256, 4, 4, tftColor(v>>4));
+        }
+      }
+    }
+}
+#endif
 
 
 static void dazzler_send(const byte *data, uint16_t size)
@@ -88,15 +181,16 @@ static void dazzler_send(const byte *data, uint16_t size)
 }
 
 
+
 static void dazzler_send_fullframe(uint8_t buffer_flag, uint16_t addr)
 {
+#if DAZZLCD>0
+  dazzler_lcd_full_redraw(buffer_flag, addr);
+#endif
   // send full picture memory
   byte b = DAZ_FULLFRAME | buffer_flag | (dazzler_mem_size > 512 ? 1 : 0);
   dazzler_send(&b, 1);
   dazzler_send(Mem+addr, dazzler_mem_size > 512 ? 2048 : 512);
-#if DEBUGLVL>0
-  printf("dazzler_send_fullframe(%i, %04X)\n", buffer_flag, addr);
-#endif
 }
 
 
@@ -105,7 +199,7 @@ static void dazzler_send_frame(int buffer_flag, uint16_t addr_old, uint16_t addr
   uint8_t b[3];
   int n = 0, d = addr_new-addr_old, end = addr_new + dazzler_mem_size;
 
-#if DEBUGLVL>0
+#if DEBUGLVL>2
   printf("dazzler_send_frame(%i, %04X, %04X)\n", buffer_flag, addr_old, addr_new);
 #endif
 
@@ -167,7 +261,6 @@ static void dazzler_check_version()
     }
 }
 
-
 void dazzler_write_mem_do(uint16_t a, byte v)
 {
   byte b[3];
@@ -176,9 +269,14 @@ void dazzler_write_mem_do(uint16_t a, byte v)
   printf("dazzler_write_mem(%04x, %02x)\n", a, v);
 #endif
 
+
   // buffer 1 must be in use if we get here
   if( ((uint16_t) (a-dazzler_mem_addr1))<dazzler_mem_size )
     {
+#ifdef DAZZLCD
+      dazzler_lcd_write_mem(a, v);
+#endif
+
       b[0] = DAZ_MEMBYTE | BUFFER1 | (((a-dazzler_mem_addr1) & 0x0700)/256);
       b[1] = a & 0xFF;
       b[2] = v;
@@ -199,6 +297,9 @@ void dazzler_write_mem_do(uint16_t a, byte v)
 void dazzler_out_ctrl(byte v)
 {
   byte b[3];
+  
+  ctrlport = v;
+  
   b[0] = DAZ_CTRL;
 
 #if DEBUGLVL>0
@@ -317,6 +418,8 @@ void dazzler_out_pict(byte v)
   // D5: 1=2k memory, 0=512byte memory
   // D4: 1=color, 0=monochrome
   // D3-D0: color info for x4 high res mode
+
+  pictport = v;
 
 #if DEBUGLVL>0
   static byte prev = 0xff;
@@ -581,6 +684,24 @@ void dazzler_setup()
   dazzler_client_features = 0;
 
   dazzler_set_iface(config_dazzler_interface());
+
+#ifdef DAZZLCD
+  tft.begin();
+
+  // read diagnostics (optional but can help debug problems)
+  uint8_t x = tft.readcommand8(ILI9341_RDMODE);
+  Serial.print("Display Power Mode: 0x"); Serial.println(x, HEX);
+  x = tft.readcommand8(ILI9341_RDMADCTL);
+  Serial.print("MADCTL Mode: 0x"); Serial.println(x, HEX);
+  x = tft.readcommand8(ILI9341_RDPIXFMT);
+  Serial.print("Pixel Format: 0x"); Serial.println(x, HEX);
+  x = tft.readcommand8(ILI9341_RDIMGFMT);
+  Serial.print("Image Format: 0x"); Serial.println(x, HEX);
+  x = tft.readcommand8(ILI9341_RDSELFDIAG);
+  Serial.print("Self Diagnostic: 0x"); Serial.println(x, HEX); 
+
+  tft.fillScreen(ILI9341_BLACK);
+#endif
 }
 
 #endif
