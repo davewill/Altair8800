@@ -97,9 +97,9 @@ const int16_t tftColor(int8_t v)
   if (pictport & 0x10)
   {    
   uint8_t i = v & 0x08;
-  return tft.color565(((v & 0x01) ? 0xff : 0) / (i ? 1 : 2),
-                      ((v & 0x02) ? 0xff : 0) / (i ? 1 : 2),
-                      ((v & 0x04) ? 0xff : 0) / (i ? 1 : 2));
+  return tft.color565(((v & 0x01) ? 0xff : 0) / (i ? 1 : 3),
+                      ((v & 0x02) ? 0xff : 0) / (i ? 1 : 3),
+                      ((v & 0x04) ? 0xff : 0) / (i ? 1 : 3));
   }  
   else
   {
