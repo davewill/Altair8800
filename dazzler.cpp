@@ -62,7 +62,7 @@ void dazzler_setup() {}
 #define FEAT_KEYBAORD 0x20
 #define FEAT_FRAMEBUF 0x40
 
-#define DEBUGLVL 4
+#define DEBUGLVL 1
 
 byte dazzler_iface = 0xff;
 int  dazzler_client_version = -1;
@@ -110,7 +110,7 @@ const int16_t tftColor(int8_t v)
 
 void getXY(uint16_t a, uint8_t res, uint8_t &x, uint8_t &y)
 {
-  uint8_t npix = (pictport & 0x40) ? 8 : 2;
+  uint8_t npix = (pictport & 0x40) ? 4 : 2;
   
   if (!(pictport & 0x20))
   {
@@ -123,6 +123,10 @@ void getXY(uint16_t a, uint8_t res, uint8_t &x, uint8_t &y)
   
     x = npix*(qa % (res/(npix*2)));
     y = (qa / (res/(npix*2)));
+
+    // Each byte is two lines tall
+    if (pictport & 0x40)  y *= 2;
+    
     if (a < 512) {
       // X and Y are right
     }
@@ -146,17 +150,34 @@ static void dazzler_lcd_draw_byte_xy(uint8_t res, uint8_t x, uint8_t y, byte v)
 
     if (!(pictport & 0x40))
     {
-      tft.fillRect(scale*x*240/256, scale*y*240/256, scale, scale, tftColor(v&0x0F));
-      tft.fillRect(scale*(x+1)*240/256, scale*y*240/256, scale, scale, tftColor(v>>4));
+      if (v == 0 || v == 0xff)
+      {
+        tft.fillRect(scale*x*240/256, scale*y*240/256, 2*scale, scale, tftColor(v&0x0F));
+      }
+      else
+      {
+        tft.fillRect(scale*x*240/256, scale*y*240/256, scale, scale, tftColor(v&0x0F));
+        tft.fillRect(scale*(x+1)*240/256, scale*y*240/256, scale, scale, tftColor(v>>4));
+      }
 #if DEBUGLVL>3
 printf("tft.drawPixel(%u, %u, %04x)\r\n", x, y, (unsigned int) v);
 #endif
     }
     else
     {
-      for (int i = 0; i < 8; i++)
+      if (v == 0 || v == 0xff)
       {
-        tft.fillRect(scale*(x+i)*240/256, scale*y*240/256, scale, scale, (v & (0x01 << i)) ? pictcolor : 0);
+        tft.fillRect(scale*x*240/256, scale*y*240/256, 4*scale, 2*scale, (v & 0x01) ? pictcolor : 0);
+      }
+      else
+      {
+        for (int i = 0; i < 2; i++)
+        {
+          tft.fillRect(scale*(x+2*i)*240/256, scale*y*240/256, scale, scale, (v & (0x01 << 4*i)) ? pictcolor : 0);
+          tft.fillRect(scale*(x+2*i+1)*240/256, scale*y*240/256, scale, scale, (v & (0x02 << 4*i)) ? pictcolor : 0);
+          tft.fillRect(scale*(x+2*i)*240/256, scale*(y+1)*240/256, scale, scale, (v & (0x04 << 4*i)) ? pictcolor : 0);
+          tft.fillRect(scale*(x+2*i+1)*240/256, scale*(y+1)*240/256, scale, scale, (v & (0x08 << 4*i)) ? pictcolor : 0);
+        }
       }
 #if DEBUGLVL>3
 printf("tft.drawPixel(%u, %u, %04x)\r\n", x, y, (unsigned int) v);
@@ -170,7 +191,7 @@ static void dazzler_lcd_draw_byte(uint16_t a, byte v)
     int faddr = a-baseaddr;
     uint8_t x, y;
 
-    if (faddr < ((pictport & 0x20) ? 2048 : 512))
+    if ((ctrlport & 0x80) && faddr > 0 && faddr < ((pictport & 0x20) ? 2048 : 512))
     {
       uint8_t res = ((pictport & 0x20) ? 64 : 32) * ((pictport & 0x40) ? 2 : 1);
       getXY(faddr, res, x, y);
@@ -180,27 +201,27 @@ static void dazzler_lcd_draw_byte(uint16_t a, byte v)
 }
 
 
-static void dazzler_lcd_full_redraw(uint16_t addr)
+static void dazzler_lcd_full_redraw()
 {
-    SPIGuard spi;
-    int faddr = addr;
-    uint8_t x, y;
-    uint16_t a = (ctrlport & 0x7f) << 9;
-
 #if DEBUGLVL>1
   printf("dazzler_lcd_full_draw(%04X)\n", addr);
 #endif
 
-    if (addr != a)
-      return;
+  if (!(ctrlport & 0x80))
+    return;
       
   uint8_t res = ((pictport & 0x20) ? 64 : 32) * ((pictport & 0x40) ? 2 : 1);
-  uint8_t npix = (pictport & 0x40) ? 8 : 2;
+  uint8_t npix = (pictport & 0x40) ? 4 : 2;
+  int addr = (ctrlport & 0x7f) << 9;
+  uint8_t x, y;
+  SPIGuard spi;
 
   if ((pictport & 0x20))
   {
-    for (y = 0; y < res/2; y++) {
-      for (x = 0; x < res/2; x+=npix, addr++) {
+    for (y = 0; y < res/2; y++) 
+    {
+      for (x = 0; x < res/2; x+=npix, addr++) 
+      {
         uint8_t v = *(Mem+addr);
         dazzler_lcd_draw_byte_xy(res, x, y, v);
         v = *(Mem+addr+512);
@@ -210,15 +231,21 @@ static void dazzler_lcd_full_redraw(uint16_t addr)
         v = *(Mem+addr+1536);
         dazzler_lcd_draw_byte_xy(res, x+res/2, y+res/2, v);
       }
+      if (pictport & 0x40)
+        y++;
     }
   }
   else
   {
-    for (y = 0; y < res; y++) {
-      for (x = 0; x < res; x+=npix, addr++) {
+    for (y = 0; y < res; y++) 
+    {
+      for (x = 0; x < res; x+=npix, addr++) 
+      {
         uint8_t v = *(Mem+addr);
         dazzler_lcd_draw_byte_xy(res, x, y, v);
       }
+      if (pictport & 0x40)
+        y++;
     }
   }
 }
@@ -243,9 +270,6 @@ static void dazzler_send(const byte *data, uint16_t size)
 
 static void dazzler_send_fullframe(uint8_t buffer_flag, uint16_t addr)
 {
-#if DAZZLCD>0
-  dazzler_lcd_full_redraw(addr);
-#endif
   // send full picture memory
   byte b = DAZ_FULLFRAME | buffer_flag | (dazzler_mem_size > 512 ? 1 : 0);
   dazzler_send(&b, 1);
@@ -281,9 +305,6 @@ static void dazzler_send_frame(int buffer_flag, uint16_t addr_old, uint16_t addr
             b[2] = Mem[i];
             dazzler_send(b, 3);
           }
-#if DAZZLCD>0
-      dazzler_lcd_full_redraw(addr_new);
-#endif
     }
     else
     {
@@ -469,6 +490,11 @@ void dazzler_out_ctrl(byte v)
   // if client does not have a framebuffer (i.e. renders in real-time) then we can
   // send CTRL after FULLFRAME data (avoids initial short initial incorrect display)
   if( !(dazzler_client_features & FEAT_FRAMEBUF) ) { b[1] = v; dazzler_send(b, 2); }
+
+#if DAZZLCD>0
+  dazzler_lcd_full_redraw();
+#endif
+
 }
 
 
@@ -522,6 +548,10 @@ void dazzler_out_pict(byte v)
   // if client does not have a framebuffer (i.e. renders in real-time) then we can
   // send CTRL after FULLFRAME data (avoids initial short initial incorrect display)
   if( !(dazzler_client_features & FEAT_FRAMEBUF) ) { b[1] = v; dazzler_send(b, 2); }
+
+#if DAZZLCD>0
+  dazzler_lcd_full_redraw();
+#endif
 }
 
 
