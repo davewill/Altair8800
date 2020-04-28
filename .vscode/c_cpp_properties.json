@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "C:\\Users\\codej\\AppData\\Local\\Arduino15\\packages\\arduino\\tools\\**",
+                "C:\\Users\\codej\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\sam\\1.6.12\\**",
+                "C:\\Users\\codej\\Documents\\Arduino\\libraries\\Adafruit_GFX_Library",
+                "C:\\Users\\codej\\Documents\\Arduino\\libraries\\Adafruit_ILI9341",
+                "C:\\Users\\codej\\Documents\\Arduino\\libraries\\Adafruit_ImageReader_Library",
+                "C:\\Users\\codej\\Documents\\Arduino\\libraries\\Adafruit_TouchScreen",
+                "C:\\Users\\codej\\Documents\\Arduino\\libraries\\DueFlashStorage\\src",
+                "C:\\Users\\codej\\Documents\\Arduino\\libraries\\SdFat_-_Adafruit_Fork\\src",
+                "C:\\Users\\codej\\Documents\\Arduino\\libraries\\SdFat_-_Adafruit_Fork\\src\\FatLib",
+                "C:\\Users\\codej\\Documents\\Arduino\\libraries\\SdFat_-_Adafruit_Fork\\src\\SdCard",
+                "C:\\Users\\codej\\Documents\\Arduino\\libraries\\SdFat_-_Adafruit_Fork\\src\\SpiDriver"
+            ],
+            "forcedInclude": [
+                "C:\\Users\\codej\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\sam\\1.6.12\\cores\\arduino\\Arduino.h"
+            ]
+        }
+    ],
+    "version": 4
+}

@@ -1,0 +1,6 @@
+{
+    "C_Cpp.default.intelliSenseMode": "gcc-x64",
+    "C_Cpp.default.systemIncludePath": [],
+    "arduino.enableUSBDetection": false,
+    "arduino.additionalUrls": ""
+}
