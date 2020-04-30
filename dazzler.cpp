@@ -79,31 +79,50 @@ volatile byte d7a_port[5] = {0xff, 0x00, 0x00, 0x00, 0x00};
 #if DAZZLCD>0
 #include "SPI.h"
 #include "Adafruit_GFX.h"
-#include "Adafruit_ILI9341.h"
+
+#define ILI9341 1
+#define USELOWLEVELSPI 1 // currently only works with ILI9341
 
 // Use SPI
 #define TFT_CS   13
 #define TFT_DC   9
-//#define SD_CS    22
+
+#if ILI9341>0
+#include "Adafruit_ILI9341.h"
+
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC);
 
 static uint16_t
-  pixelWidth  = ILI9341_TFTHEIGHT,  // TFT dimensions
-  pixelHeight = ILI9341_TFTWIDTH,
-  lcdHeight = pixelHeight,
-  lcdWidth = pixelHeight*4/3,
-  lcdOffsetX = 0,
-  lcdOffsetY = 0;
-
+  pixelWidth  = ILI9341_TFTWIDTH,  // TFT dimensions
+  pixelHeight = ILI9341_TFTHEIGHT;
 typedef uint16_t pixel_t;
-
 volatile pixel_t pictcolor = 0xffff;
+#endif
+
+#define TFT_ROTATION 1
+#define TOPBAR 0
+#define SIDEBAR 0
+
+#if (TFT_ROTATION & 0x01) == 1
+static uint16_t
+  lcdOffsetX = 0,
+  lcdOffsetY = 0,
+  lcdHeight = pixelWidth,
+  lcdWidth = min(pixelWidth, pixelHeight-SIDEBAR);
+  #else
+static uint16_t
+  lcdOffsetX = 0,
+  lcdOffsetY = TOPBAR,
+  lcdHeight = min(pixelWidth, pixelHeight-TOPBAR),
+  lcdWidth = pixelWidth;
+#endif
 
 uint8_t dazzres;
 #define scaleX(dazzX) (lcdOffsetX+((dazzX)*lcdWidth/dazzres)) // ((256/dazzres)*(dazzX)*240/256)
 #define scaleY(dazzY) (lcdOffsetY+((dazzY)*lcdHeight/dazzres)) // ((256/dazzres)*(dazzY)*240/256)
 
-const pixel_t tftColor(int8_t v)
+#if ILI9341>0
+static pixel_t tftColor(int8_t v)
 {
   if (pictport & 0x10)
   {    
@@ -114,37 +133,38 @@ const pixel_t tftColor(int8_t v)
   }  
   else
   {
-    uint8_t gray = ((v&0x0f) << 4) | ((v&0x01) ? 0x0F : 0x00);
+    uint8_t gray = ((v&0x0f) << 4) | ((v&0x0f));
     return tft.color565(gray, gray, gray);
   }
 }
+#endif
 
-void getXY(uint16_t a, uint8_t &x, uint8_t &y)
+void getXY(uint16_t index, uint8_t &x, uint8_t &y)
 {
   uint8_t npix = (pictport & 0x40) ? 4 : 2;
   
   if (!(pictport & 0x20))
   {
-    x = npix*(a % (dazzres/npix));
-    y = (a / (dazzres/npix));
+    x = npix*(index % (dazzres/npix));
+    y = (index / (dazzres/npix));
   }
   else
   {
-    uint16_t qa = a % 512;
+    uint16_t qindex = index % 512;
   
-    x = npix*(qa % (dazzres/(npix*2)));
-    y = (qa / (dazzres/(npix*2)));
+    x = npix*(qindex % (dazzres/(npix*2)));
+    y = (qindex / (dazzres/(npix*2)));
 
     // Each byte is two lines tall
     if (pictport & 0x40)  y *= 2;
     
-    if (a < 512) {
+    if (index < 512) {
       // X and Y are right
     }
-    else if (a < 1024) {
+    else if (index < 1024) {
       x = x + dazzres/2;
     }
-    else if (a < 1536) {
+    else if (index < 1536) {
       y = y + dazzres/2;
     }
     else {
@@ -227,7 +247,7 @@ printf("tft.drawPixel(%u, %u, %04x)\r\n", x, y, (unsigned int) v);
 static void dazzler_lcd_draw_byte(uint16_t a, byte v)
 {
     uint16_t baseaddr = (ctrlport & 0x7f) << 9;
-    int32_t faddr = (int32_t) a-baseaddr;
+    int32_t index = (int32_t) a-baseaddr;
     uint8_t x, y;
 
   if (!(ctrlport & 0x80))
@@ -239,16 +259,15 @@ static void dazzler_lcd_draw_byte(uint16_t a, byte v)
   if (faddr < 5)
     printf("dazzler_lcd_draw_byte(%u, %u), faddr = %u\n", a, v, faddr);
 #endif
-    if ((ctrlport & 0x80) && faddr >= 0 && faddr < ((pictport & 0x20) ? 2048 : 512))
+    if ((ctrlport & 0x80) && index >= 0 && index < ((pictport & 0x20) ? 2048 : 512))
     {
-      getXY(faddr, x, y);
+      getXY(index, x, y);
 
       dazzler_lcd_draw_byte_xy(x, y, v);
     }
 }
 
-#define USELOWLEVELSPI 1
-#if USELOWLEVELSPI
+#if USELOWLEVELSPI>0 && ILI9341>0
 static void dazzler_lcd_write_pixels(uint8_t x, uint8_t y, uint16_t addr, pixel_t *pixmap)
 {
   uint8_t npix = (pictport & 0x40) ? 4 : 2;
@@ -1042,6 +1061,7 @@ void dazzler_setup()
 
   tft.begin();
 
+#if ILI9341> 0
   // read diagnostics (optional but can help debug problems)
   uint8_t x = tft.readcommand8(ILI9341_RDMODE);
   Serial.print("Display Power Mode: 0x"); Serial.println(x, HEX);
@@ -1055,7 +1075,9 @@ void dazzler_setup()
   Serial.print("Self Diagnostic: 0x"); Serial.println(x, HEX); 
 
   tft.fillScreen(ILI9341_BLACK);
-  tft.setRotation(1);
+#endif
+
+  tft.setRotation(TFT_ROTATION);
 
 #endif
 }
