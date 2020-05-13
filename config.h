@@ -72,6 +72,8 @@
 // Dazzler picture you need to connect a client. See:
 // https://www.hackster.io/david-hansel/dazzler-display-for-altair-simulator-3febc6
 #define USE_DAZZLER 1
+
+// Enables support for Cromemco Dazzler on SPI interfaced LCD. See lcddue.cpp
 #define DAZZLCD 1
 
 // Enables support for Processor Technology VDM-1. Note that to actually see the

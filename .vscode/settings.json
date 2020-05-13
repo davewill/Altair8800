@@ -21,6 +21,9 @@
         "*.tcc": "cpp",
         "string": "cpp",
         "unordered_map": "cpp",
-        "memory": "cpp"
-    }
+        "memory": "cpp",
+        "tuple": "cpp",
+        "utility": "cpp"
+    },
+    "C_Cpp.default.defines": ["__SAM3X8E__"]
 }

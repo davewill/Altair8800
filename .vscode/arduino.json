@@ -2,5 +2,6 @@
     "board": "arduino:sam:arduino_due_x",
     "port": "COM6",
     "sketch": "Altair8800.ino",
-    "output": "../build"
+    "output": "../build",
+    "programmer": "Atmel-ICE (AVR)"
 }

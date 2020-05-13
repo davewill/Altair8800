@@ -3,6 +3,9 @@
         {
             "name": "Win32",
             "includePath": [
+                "C:\\Users\\codej\\Documents\\Arduino\\libraries\\RA8875-RA8875_t4",
+                "C:\\Users\\codej\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\sam\\1.6.12\\libraries\\SPI\\src",
+                "C:\\Users\\codej\\Documents\\Arduino\\libraries\\RA8875-0.70",
                 "C:\\Users\\codej\\AppData\\Local\\Arduino15\\packages\\arduino\\tools\\**",
                 "C:\\Users\\codej\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\sam\\1.6.12\\**",
                 "C:\\Users\\codej\\Documents\\Arduino\\libraries\\Adafruit_GFX_Library",

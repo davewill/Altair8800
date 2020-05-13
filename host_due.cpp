@@ -30,6 +30,7 @@
 #include "timer.h"
 #include "dazzler.h"
 #include "soft_uart.h"
+#include "lcddue.h"
 
 #include <SPI.h>
 #include <SdFat.h>
@@ -1840,6 +1841,8 @@ void host_setup()
 #endif
     }
 #endif
+
+  lcdSetup();
 
   // set serial receive callbacks to default
   for(byte i=0; i<HOST_NUM_SERIAL_PORTS; i++)

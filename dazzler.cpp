@@ -24,7 +24,7 @@
 #include "serial.h"
 #include "timer.h"
 #include "numsys.h"
-#include <malloc.h>
+#include "lcddue.h"
 
 #if USE_DAZZLER==0
 
@@ -70,444 +70,9 @@ int  dazzler_client_version = -1;
 uint16_t dazzler_client_features = 0;
 uint32_t dazzler_vsync_cycles = 0;
 
-volatile byte ctrlport = 0x00;
-volatile byte pictport = 0x00;
-
 uint16_t dazzler_mem_addr1, dazzler_mem_addr2, dazzler_mem_start, dazzler_mem_end, dazzler_mem_size;
 volatile byte d7a_port[5] = {0xff, 0x00, 0x00, 0x00, 0x00};
 
-#if DAZZLCD>0
-#include "SPI.h"
-#include "Adafruit_GFX.h"
-
-#define ILI9341 1
-#define USELOWLEVELSPI 1 // currently only works with ILI9341
-
-// Use SPI
-#define TFT_CS   13
-#define TFT_DC   9
-
-#if ILI9341>0
-#include "Adafruit_ILI9341.h"
-
-Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC);
-
-static uint16_t
-  pixelWidth  = ILI9341_TFTWIDTH,  // TFT dimensions
-  pixelHeight = ILI9341_TFTHEIGHT;
-typedef uint16_t pixel_t;
-volatile pixel_t pictcolor = 0xffff;
-#endif
-
-#define TFT_ROTATION 1
-#define TOPBAR 0
-#define SIDEBAR 0
-
-#if (TFT_ROTATION & 0x01) == 1
-static uint16_t
-  lcdOffsetX = 0,
-  lcdOffsetY = 0,
-  lcdHeight = pixelWidth,
-  lcdWidth = min(pixelWidth, pixelHeight-SIDEBAR);
-  #else
-static uint16_t
-  lcdOffsetX = 0,
-  lcdOffsetY = TOPBAR,
-  lcdHeight = min(pixelWidth, pixelHeight-TOPBAR),
-  lcdWidth = pixelWidth;
-#endif
-
-uint8_t dazzres;
-#define scaleX(dazzX) (lcdOffsetX+((dazzX)*lcdWidth/dazzres)) // ((256/dazzres)*(dazzX)*240/256)
-#define scaleY(dazzY) (lcdOffsetY+((dazzY)*lcdHeight/dazzres)) // ((256/dazzres)*(dazzY)*240/256)
-
-#if ILI9341>0
-static pixel_t tftColor(int8_t v)
-{
-  if (pictport & 0x10)
-  {    
-  uint8_t i = v & 0x08;
-  return tft.color565(((v & 0x01) ? 0xff : 0) / (i ? 1 : 3),
-                      ((v & 0x02) ? 0xff : 0) / (i ? 1 : 3),
-                      ((v & 0x04) ? 0xff : 0) / (i ? 1 : 3));
-  }  
-  else
-  {
-    uint8_t gray = ((v&0x0f) << 4) | ((v&0x0f));
-    return tft.color565(gray, gray, gray);
-  }
-}
-#endif
-
-void getXY(uint16_t index, uint8_t &x, uint8_t &y)
-{
-  uint8_t npix = (pictport & 0x40) ? 4 : 2;
-  
-  if (!(pictport & 0x20))
-  {
-    x = npix*(index % (dazzres/npix));
-    y = (index / (dazzres/npix));
-  }
-  else
-  {
-    uint16_t qindex = index % 512;
-  
-    x = npix*(qindex % (dazzres/(npix*2)));
-    y = (qindex / (dazzres/(npix*2)));
-
-    // Each byte is two lines tall
-    if (pictport & 0x40)  y *= 2;
-    
-    if (index < 512) {
-      // X and Y are right
-    }
-    else if (index < 1024) {
-      x = x + dazzres/2;
-    }
-    else if (index < 1536) {
-      y = y + dazzres/2;
-    }
-    else {
-      x = x + dazzres/2;
-      y = y + dazzres/2;
-    }
-  }
-}
-
-static void dazzler_lcd_draw_byte_xy(uint8_t x, uint8_t y, byte v, boolean colorchangeonly = 0)
-{
-    SPIGuard spi;
-
-#if DEBUGLVL>2
-  if (x < 5 && y < 5)
-    printf("dazzler_lcd_draw_byte_xy(%u, %u)\n", x, y);
-#endif
-  if (!(ctrlport & 0x80))
-    return;
-      
-    if (!(pictport & 0x40))
-    {
-      if (v == 0 || v == 0xff)
-      {
-        tft.fillRect(scaleX(x), scaleY(y), scaleX(x+2)-scaleX(x), scaleY(y+1)-scaleY(y), tftColor(v&0x0F));
-      }
-      else
-      {
-        tft.fillRect(scaleX(x), scaleY(y), scaleX(x+1)-scaleX(x), scaleY(y+1)-scaleY(y), tftColor(v&0x0F));
-        tft.fillRect(scaleX(x+1), scaleY(y), scaleX(x+2)-scaleX(x+1), scaleY(y+1)-scaleY(y), tftColor(v>>4));
-      }
-    }
-    else
-    {
-      if (v == 0 || v == 0xff)
-      {
-          uint16_t c = (v & 0x01) ? pictcolor : 0;
-          if (!colorchangeonly || c != 0)
-          {
-            tft.fillRect(scaleX(x), scaleY(y), scaleX(x+4)-scaleX(x), scaleY(y+2)-scaleY(y), c);
-#if DEBUGLVL>2
-  if (x < 5 && y < 5)
-    printf("tft.fillRect(%u, %u, %04x)\r\n", scaleX(x), scaleY(y), (unsigned int) c);
-#endif
-          }
-      }
-      else
-      {
-        for (int i = 0; i < 2; i++)
-        {
-          uint16_t c = (v & (0x01 << 4*i)) ? pictcolor : 0;
-          if (!colorchangeonly || c != 0)
-          {
-            tft.fillRect(scaleX(x+2*i), scaleY(y), scaleX(x+2*i+1)-scaleX(x+2*i), scaleY(y+1)-scaleY(y), c);
-#if DEBUGLVL>2
-  if (x < 5 && y < 5)
-    printf("tft.fillRect(%u, %u, %04x)\r\n", scaleX(x+2*i), scaleY(y), (unsigned int) c);
-#endif
-          }
-
-          c = (v & (0x02 << 4*i)) ? pictcolor : 0;
-          if (!colorchangeonly || c != 0)
-            tft.fillRect(scaleX(x+2*i+1), scaleY(y), scaleX(x+2*i+2)-scaleX(x+2*i+1), scaleY(y+1)-scaleY(y), c);
-
-          c = (v & (0x04 << 4*i)) ? pictcolor : 0;
-          if (!colorchangeonly || c != 0)
-            tft.fillRect(scaleX(x+2*i), scaleY(y+1), scaleX(x+2*i+1)-scaleX(x+2*i), scaleY(y+2)-scaleY(y+1), c);
-
-          c = (v & (0x08 << 4*i)) ? pictcolor : 0;
-          if (!colorchangeonly || c != 0)
-            tft.fillRect(scaleX(x+2*i+1), scaleY(y+1), scaleX(x+2*i+2)-scaleX(x+2*i+1), scaleY(y+2)-scaleY(y+1), c);
-        }
-      }
-#if DEBUGLVL>3
-printf("tft.drawPixel(%u, %u, %04x)\r\n", x, y, (unsigned int) v);
-#endif
-    }
-}
-
-static void dazzler_lcd_draw_byte(uint16_t a, byte v)
-{
-    uint16_t baseaddr = (ctrlport & 0x7f) << 9;
-    int32_t index = (int32_t) a-baseaddr;
-    uint8_t x, y;
-
-  if (!(ctrlport & 0x80))
-  {
-    return;
-  }
-      
-#if DEBUGLVL>2
-  if (faddr < 5)
-    printf("dazzler_lcd_draw_byte(%u, %u), faddr = %u\n", a, v, faddr);
-#endif
-    if ((ctrlport & 0x80) && index >= 0 && index < ((pictport & 0x20) ? 2048 : 512))
-    {
-      getXY(index, x, y);
-
-      dazzler_lcd_draw_byte_xy(x, y, v);
-    }
-}
-
-#if USELOWLEVELSPI>0 && ILI9341>0
-static void dazzler_lcd_write_pixels(uint8_t x, uint8_t y, uint16_t addr, pixel_t *pixmap)
-{
-  uint8_t npix = (pictport & 0x40) ? 4 : 2;
-  uint16_t i, j, pmapindex = 0;
-  #if DEBUGLVL>2
-  printf("dazzler_lcd_draw_row(%u, %u, %04x)\r\n", x, y, addr);
-  #endif
-
-  if (!(pictport & 0x40))
-  {
-    for (i = 0; i < 32; i++) 
-    {
-      if ((pictport & 0x20) && i == 16)
-        addr += 512-16;
-
-      pixel_t c = tftColor(Mem[addr+i] & 0x0F);
-      for (j = scaleX(x+i*npix); j < scaleX(x+i*npix+1); j++)
-      {
-        tft.SPI_WRITE16(pixmap[pmapindex++] = c);
-      }
-
-      c = tftColor(Mem[addr+i] >> 4);
-      for (;j < scaleX(x+i*npix+2); j++)
-      {
-        tft.SPI_WRITE16(pixmap[pmapindex++] = c);
-      }
-    }
-  }
-  else
-  {
-    uint8_t odd = y & 0x01;
-
-    for (i = 0; i < 32; i++)
-    {
-      if ((pictport & 0x20) && i == 16)
-        addr += 512-16;
-
-      pixel_t c = (Mem[addr+i] & (0x01 << 2*odd)) ? pictcolor : 0;
-      for (j = scaleX(x+i*npix); j < scaleX(x+i*npix+1); j++)
-      {
-        tft.SPI_WRITE16(pixmap[pmapindex++] = c);
-      }
-
-      c = (Mem[addr+i] & (0x02 << 2*odd)) ? pictcolor : 0;
-      for (;j < scaleX(x+i*npix+2); j++)
-      {
-        tft.SPI_WRITE16(pixmap[pmapindex++] = c);
-      }
-
-      c = (Mem[addr+i] & (0x10 << 2*odd)) ? pictcolor : 0;
-      for (;j < scaleX(x+i*npix+3); j++)
-      {
-        tft.SPI_WRITE16(pixmap[pmapindex++] = c);
-      }
-
-      c = (Mem[addr+i] & (0x20 << 2*odd)) ? pictcolor : 0;
-      for (;j < scaleX(x+i*npix+4); j++)
-      {
-        tft.SPI_WRITE16(pixmap[pmapindex++] = c);
-      }
-    }
-  }
-  
-  for (i = scaleY(y)+1; i < scaleY(y+1); i++)
-  {
-    tft.writePixels(pixmap, pmapindex);
-    #if DEBUGLVL>3
-    printf("tft.drawRGBBitmap(%u, %u, pixmap, %u, 1)\r\n", scaleX(x), i+scaleY(y), pmapindex);
-    #endif
-  }
-}
-
-static void dazzler_lcd_full_redraw()
-{
-  #if DEBUGLVL>1
-  printf("dazzler_lcd_full_draw()\n");
-  #endif
-
-  if (!(ctrlport & 0x80))
-  {
-    #if DEBUGLVL>1
-    printf("dazzler_lcd_full_draw() Aborted\n");
-    #endif
-
-    return;
-  }
-      
-  uint8_t npix = (pictport & 0x40) ? 4 : 2;
-  int addr = (ctrlport & 0x7f) << 9;
-  uint8_t x, y;
-
-  SPIGuard spi;
-
-  pixel_t *pixmap = (uint16_t *) malloc(lcdWidth*sizeof(pixel_t));
-  if (pixmap == NULL)
-    return;
-
-  tft.startWrite();
-  tft.setAddrWindow(lcdOffsetX, lcdOffsetY, lcdWidth, lcdHeight); // Clipped area
-  for (y = 0; y < dazzres; y++) 
-  {
-    if (pictport & 0x20)
-    {
-      if (y == dazzres/2)
-        addr += 512;
-    }
-
-    dazzler_lcd_write_pixels(0, y, addr, pixmap);
-    if (pictport & 0x40) 
-    {
-      y++;
-      dazzler_lcd_write_pixels(0, y, addr, pixmap);
-    }
-
-    if (pictport & 0x20)
-    {
-      addr += dazzres/npix/2;
-    }
-    else
-    {
-      addr += dazzres/npix;
-    }
-
-  }
-  tft.endWrite();
-
-  free(pixmap);
-}
-#else
-static void dazzler_lcd_draw_row(uint8_t y, uint16_t addr, pixel_t *pixmap)
-{
-  uint8_t npix = (pictport & 0x40) ? 4 : 2;
-  uint16_t i, j, pmapindex = 0;
-  SPIGuard spi;
-
-  #if DEBUGLVL>2
-  printf("dazzler_lcd_draw_row(%u, %u, %04x)\r\n", x, y, addr);
-  #endif
-
-  if (!(pictport & 0x40))
-  {
-    // 15 color mode (low res)
-    for (i = 0; i < 32; i++) 
-    {
-      if ((pictport & 0x20) && i == 16)
-        addr += 512-16;
-
-      pixel_t c = tftColor(Mem[addr+i] & 0x0F);
-      for (j = scaleX(i*npix); j < scaleX(i*npix+1); j++)
-      {
-        pixmap[pmapindex++] = c;
-      }
-
-      c = tftColor(Mem[addr+i] >> 4);
-      for (;j < scaleX(i*npix+2); j++)
-      {
-        pixmap[pmapindex++] = c;
-      }
-    }
-  }
-  else
-  {
-    // Two color mode (4x res mode)
-    uint8_t odd = y & 0x01;
-
-    for (i = 0; i < 32; i++)
-    {
-      if ((pictport & 0x20) && i == 16)
-        addr += 512-16;
-
-      pixel_t c = (Mem[addr+i] & (0x01 << 2*odd)) ? pictcolor : 0;
-      for (j = scaleX(i*npix); j < scaleX(i*npix+1); j++)
-      {
-        pixmap[pmapindex++] = c;
-      }
-
-      c = (Mem[addr+i] & (0x02 << 2*odd)) ? pictcolor : 0;
-      for (;j < scaleX(i*npix+2); j++)
-      {
-        pixmap[pmapindex++] = c;
-      }
-
-      c = (Mem[addr+i] & (0x10 << 2*odd)) ? pictcolor : 0;
-      for (;j < scaleX(i*npix+3); j++)
-      {
-        pixmap[pmapindex++] = c;
-      }
-
-      c = (Mem[addr+i] & (0x20 << 2*odd)) ? pictcolor : 0;
-      for (;j < scaleX(i*npix+4); j++)
-      {
-        pixmap[pmapindex++] = c;
-      }
-    }
-  }
-
-  for (i = scaleY(y); i < scaleY(y+1); i++)
-  {
-    tft.drawRGBBitmap(scaleX(0), i, pixmap, pmapindex, 1);
-    #if DEBUGLVL>3
-    printf("tft.drawRGBBitmap(%u, %u, pixmap, %u, 1)\r\n", scaleX(x), i+scaleY(y+n), pmapindex);
-    #endif
-  }
-}
-
-static void dazzler_lcd_full_redraw()
-{
-  #if DEBUGLVL>1
-  printf("dazzler_lcd_full_draw()\n");
-  #endif
-
-  if (!(ctrlport & 0x80))
-    return;
-      
-  int addr = (ctrlport & 0x7f) << 9;
-  uint8_t x, y;
-
-  pixel_t *pixmap = (uint16_t *) malloc(lcdWidth*sizeof(pixel_t));
-  if (pixmap == NULL)
-    return;
-
-  for (y = 0; y < dazzres; y++, addr += 16) 
-  {
-    if (pictport & 0x20)
-    {
-      if (y == dazzres/2)
-        addr += 512;
-    }
-
-    dazzler_lcd_draw_row(y, addr, pixmap);
-    if (pictport & 0x40) 
-    {
-      y++;
-      dazzler_lcd_draw_row(y, addr, pixmap);
-    }
-  }
-  free(pixmap);
-}
-#endif // USELOWLEVELSPI
-#endif // DAZZLCD
 
 static void dazzler_send(const byte *data, uint16_t size)
 {
@@ -557,9 +122,7 @@ static void dazzler_send_frame(int buffer_flag, uint16_t addr_old, uint16_t addr
       for(int i=addr_new; i<end; i++)
         if( Mem[i] != Mem[i-d] )
           {
-#if DAZZLCD>0
             dazzler_lcd_draw_byte(i, Mem[i]);
-#endif
 
             b[0] = DAZ_MEMBYTE | buffer_flag | (((i-addr_new) & 0x0700)/256);
             b[1] = i & 255;
@@ -570,9 +133,7 @@ static void dazzler_send_frame(int buffer_flag, uint16_t addr_old, uint16_t addr
     else
     {
       // sending full frame is shorter
-#if DAZZLCD>0
       dazzler_lcd_full_redraw();
-#endif
       dazzler_send_fullframe(buffer_flag, addr_new);
     }
 }
@@ -616,9 +177,7 @@ void dazzler_write_mem_do(uint16_t a, byte v)
   printf("dazzler_write_mem(%04x, %02x)\n", a, v);
 #endif
 
-#if DAZZLCD>0
   dazzler_lcd_draw_byte(a, v);
-#endif
 
   // buffer 1 must be in use if we get here
   if( ((uint16_t) (a-dazzler_mem_addr1))<dazzler_mem_size )
@@ -644,7 +203,7 @@ void dazzler_out_ctrl(byte v)
 {
   byte b[3];
   
-  ctrlport = v;
+  dazzler_lcd_update_ctrlport(v);
   
   b[0] = DAZ_CTRL;
 
@@ -669,9 +228,9 @@ void dazzler_out_ctrl(byte v)
       // dazzler is turned off
       dazzler_mem_addr1 = 0xFFFF;
       dazzler_mem_addr2 = 0xFFFF;
-#if DAZZLCD>0
-      tft.fillRect(lcdOffsetX, lcdOffsetY, lcdWidth, lcdWidth, ILI9341_DARKCYAN);
-#endif
+
+      dazzler_lcd_clear();
+
       v = 0x00;
     }
   else if( (dazzler_client_features & FEAT_DUAL_BUF)==0 )
@@ -680,9 +239,7 @@ void dazzler_out_ctrl(byte v)
       if( dazzler_mem_addr1==0xFFFF )
         {
           // not yet initialized => send full frame
-#if DAZZLCD>0
           dazzler_lcd_full_redraw();
-#endif
           dazzler_send_fullframe(BUFFER1, a);
           dazzler_mem_addr1 = a;
         }
@@ -774,22 +331,7 @@ void dazzler_out_pict(byte v)
   // D3-D0: color info for x4 high res mode
 
 
-#if DAZZLCD>0
-  if (v != pictport) {
-    dazzres = ((v & 0x20) ? 64 : 32) * ((v & 0x40) ? 2 : 1);
-    //if ((v&0x40) || (v&0x70 != pictport&0x70))
-    {
-      pictport = v;
-      pictcolor = tftColor(v & 0x0F);
-      dazzler_lcd_full_redraw();
-    }
-#if DEBUGLVL>0
-    printf("pictport = %02x, pictcolor = (%02x)\n", pictport, pictcolor);
-#endif
-  }
-#endif
-
-pictport = v;
+  dazzler_lcd_update_pictport(v);
 
 #if DEBUGLVL>0
   static byte prev = 0xff;
@@ -1055,31 +597,6 @@ void dazzler_setup()
   dazzler_client_features = 0;
 
   dazzler_set_iface(config_dazzler_interface());
-
-#if DAZZLCD>0
-  SPIGuard spi;
-
-  tft.begin();
-
-#if ILI9341> 0
-  // read diagnostics (optional but can help debug problems)
-  uint8_t x = tft.readcommand8(ILI9341_RDMODE);
-  Serial.print("Display Power Mode: 0x"); Serial.println(x, HEX);
-  x = tft.readcommand8(ILI9341_RDMADCTL);
-  Serial.print("MADCTL Mode: 0x"); Serial.println(x, HEX);
-  x = tft.readcommand8(ILI9341_RDPIXFMT);
-  Serial.print("Pixel Format: 0x"); Serial.println(x, HEX);
-  x = tft.readcommand8(ILI9341_RDIMGFMT);
-  Serial.print("Image Format: 0x"); Serial.println(x, HEX);
-  x = tft.readcommand8(ILI9341_RDSELFDIAG);
-  Serial.print("Self Diagnostic: 0x"); Serial.println(x, HEX); 
-
-  tft.fillScreen(ILI9341_BLACK);
-#endif
-
-  tft.setRotation(TFT_ROTATION);
-
-#endif
 }
 
 #endif
