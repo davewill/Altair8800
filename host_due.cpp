@@ -30,7 +30,6 @@
 #include "timer.h"
 #include "dazzler.h"
 #include "soft_uart.h"
-#include "lcddue.h"
 
 #include <SPI.h>
 #include <SdFat.h>
@@ -1435,6 +1434,11 @@ size_t host_serial_write(byte i, const char *buf, size_t n)
         // do not allow serial interrupts while writing the data, otherwise
         // the serial transmit buffer can get out of sync and skip data bytes
         // (bug in Arduino UART serial implementation)
+
+        #if TERMLCD>0
+        lcd_term_write(buf, n);
+        #endif
+
         noInterrupts();
         if( Serial.availableForWrite()<n ) n = Serial.availableForWrite();
         for(i=0; i<n; i++) Serial.write(buf[i]); 
@@ -1448,6 +1452,11 @@ size_t host_serial_write(byte i, const char *buf, size_t n)
         // do not allow serial interrupts while writing the data, otherwise
         // the serial transmit buffer can get out of sync and skip data bytes
         // (bug in Arduino UART serial implementation)
+
+        #if TERMLCD>0
+        lcd_term_write(buf, n);
+        #endif
+
         noInterrupts();
         if( Serial1.availableForWrite()<n ) n = Serial1.availableForWrite();
         for(i=0; i<n; i++) Serial1.write(buf[i]); 
@@ -1636,7 +1645,7 @@ static void switches_setup()
   attachInterrupt(function_switch_pin[ 7], switch_interrupt_7,  CHANGE);
   attachInterrupt(function_switch_pin[ 8], switch_interrupt_8,  CHANGE);
   attachInterrupt(function_switch_pin[ 9], switch_interrupt_9,  CHANGE);
-#if !(USE_SERIAL_ON_A6A7>0)
+#if !(USE_SERIAL_ON_A6A7>0) && !(USETOUCH>0)
   attachInterrupt(function_switch_pin[10], switch_interrupt_10, CHANGE);
   attachInterrupt(function_switch_pin[11], switch_interrupt_11, CHANGE);
 #endif
@@ -1715,7 +1724,7 @@ signed char isinput[] =
     1, // D57 (A3)    => EXAMINE NEXT
     1, // D58 (A4)    => DEPOSIT
     1, // D59 (A5)    => DEPOSIT NEXT
-#if USE_SERIAL_ON_A6A7>0
+#if USE_SERIAL_ON_A6A7>0 || USETOUCH>0
    -1, // D60 (A6)    => serial_tc5 RX (don't set)
    -1, // D61 (A7)    => serial_tc5 TX (don't set)
 #else
@@ -1842,7 +1851,9 @@ void host_setup()
     }
 #endif
 
-  lcdSetup();
+#if DAZZLCD==1
+  lcd_setup();
+#endif
 
   // set serial receive callbacks to default
   for(byte i=0; i<HOST_NUM_SERIAL_PORTS; i++)

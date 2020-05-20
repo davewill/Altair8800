@@ -1,6 +1,6 @@
 #ifdef __SAM3X8E__
 
-#include "lcddue.h"
+#include "config.h"
 
 #if DAZZLCD>0
 
@@ -38,16 +38,16 @@ volatile pixel_t pictcolor = 0xffff;
 
 #if (TFT_ROTATION & 0x01) == 1
 static uint16_t
-  lcdOffsetX = 0,
-  lcdOffsetY = 0,
-  lcdHeight = pixelWidth,
-  lcdWidth = min(pixelWidth*4/3, pixelHeight-SIDEBAR);
+  dazzOffsetX = 0,
+  dazzOffsetY = 0,
+  dazzHeight = pixelWidth,
+  dazzWidth = min(pixelWidth*4/3, pixelHeight-SIDEBAR);
   #else
 static uint16_t
-  lcdOffsetX = 0,
-  lcdOffsetY = TOPBAR,
-  lcdHeight = min(pixelWidth, pixelHeight-TOPBAR),
-  lcdWidth = pixelWidth;
+  dazzOffsetX = 0,
+  dazzOffsetY = TOPBAR,
+  dazzHeight = min(pixelWidth, pixelHeight-TOPBAR),
+  dazzWidth = pixelWidth;
 #endif
 
 #define Color565  color565
@@ -66,24 +66,135 @@ volatile pixel_t pictcolor = 0xffff;
 #define TOPBAR 0
 #define SIDEBAR 0
 
-#if (TFT_ROTATION & 0x01) == 0
 static uint16_t
-  lcdOffsetX = 0,
-  lcdOffsetY = 0,
-  lcdHeight = pixelHeight,
-  lcdWidth = min(pixelHeight*4/3, pixelWidth-SIDEBAR);
-  #else
-static uint16_t
-  lcdOffsetX = 0,
-  lcdOffsetY = TOPBAR,
-  lcdHeight = min(pixelWidth, pixelHeight-TOPBAR),
-  lcdWidth = pixelWidth;
-#endif
+  termOffsetX, termOffsetY, termHeight, termWidth,
+  dazzOffsetX, dazzOffsetY, dazzHeight, dazzWidth;
 #endif
 
-uint8_t dazzres;
-#define scaleX(dazzX) (lcdOffsetX+((dazzX)*lcdWidth/dazzres)) // ((256/dazzres)*(dazzX)*240/256)
-#define scaleY(dazzY) (lcdOffsetY+((dazzY)*lcdHeight/dazzres)) // ((256/dazzres)*(dazzY)*240/256)
+boolean dazzEnabled = false;
+boolean termEnabled = false;
+
+uint8_t dazzres, screenconfig;
+#define scaleX(dazzX) (dazzOffsetX+((dazzX)*dazzWidth/dazzres)) // ((256/dazzres)*(dazzX)*240/256)
+#define scaleY(dazzY) (dazzOffsetY+((dazzY)*dazzHeight/dazzres)) // ((256/dazzres)*(dazzY)*240/256)
+
+void lcd_set_screen_config(enum lcdLayout config)
+{
+
+#if USERA8875>0
+  switch (config)
+  {
+    case LAYOUT_DAZZ:
+      termEnabled = false;
+      dazzEnabled = true;
+      dazzOffsetX = 0;
+      dazzOffsetY = 0;
+      dazzHeight = pixelHeight;
+      dazzWidth = min(pixelHeight*4/3, pixelWidth-SIDEBAR);
+      break;
+
+    case LAYOUT_TERM:
+      termEnabled = true;
+      dazzEnabled = false;
+      termOffsetX = 0;
+      termOffsetY = 0;
+      termHeight = pixelHeight;
+      termWidth = min(pixelHeight*4/3, pixelWidth-SIDEBAR);
+      break;
+
+    case LAYOUT_DAZZ_MAIN:
+      dazzEnabled = true;
+      dazzWidth = pixelWidth/2;
+      dazzHeight = dazzWidth*3/4;
+      dazzOffsetX = pixelWidth/2;
+      dazzOffsetY = pixelHeight-dazzHeight;
+
+      termEnabled = true;
+      termWidth = pixelWidth/2;
+      termHeight = pixelHeight;
+      termOffsetX = 0;
+      termOffsetY = 0;
+      break;
+
+    case LAYOUT_TERM_MAIN:
+      dazzEnabled = true;
+      dazzWidth = pixelWidth/2;
+      dazzHeight = dazzWidth*3/4;
+      dazzOffsetX = 0;
+      dazzOffsetY = pixelHeight-dazzHeight;
+
+      termEnabled = true;
+      termWidth = pixelWidth/2;
+      termHeight = pixelHeight;
+      termOffsetX = pixelWidth/2;
+      termOffsetY = 0;
+      break;
+
+    default:
+      // bad config
+      return;
+  }
+
+  screenconfig = config;
+
+  {
+    SPIGuard spi;
+    tft.clearScreen();
+    lcd_term_full_redraw();
+    dazzler_lcd_full_redraw();
+  }
+#endif
+
+}
+
+void lcd_term_write(const char *buf, size_t n)
+{
+  #if TERMLCD>0
+  if (termEnabled) 
+  {
+    SPIGuard spi;
+
+    #if 0
+    tft.setScrollWindow();
+    for (int i = 0; i < n; i++)
+    {
+    }
+    #else
+    tft.setActiveWindow(termOffsetX, termOffsetX+termWidth-1, termOffsetY, termOffsetY+termHeight-1);
+    tft.write(buf, n);
+    tft.setActiveWindow();
+    #endif
+  }
+  #endif
+}
+
+void lcd_term_full_redraw()
+{
+  #if TERMLCD>0
+
+  if (termEnabled) 
+  {
+    SPIGuard spi;
+
+    tft.setActiveWindow(termOffsetX, termOffsetX+termWidth-1, termOffsetY, termOffsetY+termHeight-1);
+    tft.setCursor(termOffsetX,termOffsetY);
+    tft.write("Once upon a midnight dreary, while I pondered, weak and weary,\r\n", 0);
+    tft.write("Over many a quaint and curious volume of forgotten lore,\r\n", 0);
+    tft.write("While I nodded, nearly napping, suddenly there came a tapping,\r\n", 0);
+    tft.write("As of some one gently rapping, rapping at my chamber door.\r\n", 0);
+    tft.write("'Tis some visitor,' I muttered, 'tapping at my chamber door Only this, and nothing more.'\r\n", 0);
+    tft.write("\r\n", 0);
+    tft.write("Ah, distinctly I remember it was in the bleak December,\r\n", 0);
+    tft.write("And each separate dying ember wrought its ghost upon the floor.\r\n", 0);
+    tft.write("Eagerly I wished the morrow;- vainly I had sought to borrow\r\n", 0);
+    tft.write("From my books surcease of sorrow- sorrow for the lost Lenore-\r\n", 0);
+    tft.write("For the rare and radiant maiden whom the angels name Lenore-\r\n", 0);
+    tft.write("Nameless here for evermore.\r\n", 0);
+    tft.write("");
+    tft.setActiveWindow();
+  }
+  #endif
+}
 
 static pixel_t tftColor(uint8_t v)
 {
@@ -236,7 +347,8 @@ void dazzler_lcd_update_ctrlport(uint8_t v)
 
 void dazzler_lcd_clear(void)
 {
-    tft.fillRect(lcdOffsetX, lcdOffsetY, lcdWidth, lcdWidth, 0);
+  if (dazzEnabled)
+    tft.fillRect(dazzOffsetX, dazzOffsetY, dazzWidth, dazzWidth, 0);
 }
 
 void dazzler_lcd_draw_byte(uint16_t a, byte v)
@@ -245,7 +357,7 @@ void dazzler_lcd_draw_byte(uint16_t a, byte v)
     int32_t index = (int32_t) a-baseaddr;
     uint8_t x, y;
 
-  if (!(ctrlport & 0x80))
+  if (!dazzEnabled || !(ctrlport & 0x80))
   {
     return;
   }
@@ -341,7 +453,7 @@ void dazzler_lcd_full_redraw(boolean colorchangeonly)
   printf("dazzler_lcd_full_draw()\n");
   #endif
 
-  if (!(ctrlport & 0x80))
+  if (!dazzEnabled || !(ctrlport & 0x80))
   {
     #if DEBUGLVL>1
     printf("dazzler_lcd_full_draw() Aborted\n");
@@ -356,12 +468,12 @@ void dazzler_lcd_full_redraw(boolean colorchangeonly)
 
   SPIGuard spi;
 
-  pixel_t *pixmap = (uint16_t *) malloc(lcdWidth*sizeof(pixel_t));
+  pixel_t *pixmap = (uint16_t *) malloc(dazzWidth*sizeof(pixel_t));
   if (pixmap == NULL)
     return;
 
   tft.startWrite();
-  tft.setAddrWindow(lcdOffsetX, lcdOffsetY, lcdWidth, lcdHeight); // Clipped area
+  tft.setAddrWindow(dazzOffsetX, dazzOffsetY, dazzWidth, dazzHeight); // Clipped area
   for (y = 0; y < dazzres; y++) 
   {
     if (pictport & 0x20)
@@ -478,13 +590,13 @@ void dazzler_lcd_full_redraw(boolean colorchangeonly)
   printf("dazzler_lcd_full_draw()\n");
   #endif
 
-  if (!(ctrlport & 0x80))
+  if (!dazzEnabled || !(ctrlport & 0x80))
     return;
       
   int addr = (ctrlport & 0x7f) << 9;
   uint8_t x, y;
 
-  pixel_t *pixmap = (uint16_t *) malloc(lcdWidth*sizeof(pixel_t));
+  pixel_t *pixmap = (uint16_t *) malloc(dazzWidth*sizeof(pixel_t));
   if (pixmap == NULL)
     return;
 
@@ -512,7 +624,7 @@ void dazzler_lcd_full_redraw(boolean colorchangeonly)
   printf("dazzler_lcd_full_draw(%04X)\n", addr);
 #endif
 
-  if (!(ctrlport & 0x80))
+  if (!dazzEnabled || !(ctrlport & 0x80))
     return;
       
   uint8_t res = ((pictport & 0x20) ? 64 : 32) * ((pictport & 0x40) ? 2 : 1);
@@ -555,7 +667,93 @@ void dazzler_lcd_full_redraw(boolean colorchangeonly)
 }
 #endif // USELOWLEVELSPI
 
-void lcdSetup(void)
+#if USETOUCH>0
+void lcdCheckTouch(void)
+{
+  uint16_t x, y;
+  static uint32_t last = 0;
+  uint32_t now = millis();
+
+  SPIGuard spi;
+
+  if (now-last > 100 && tft.touched(true))
+  {
+    tft.touchReadPixel(&x, &y);
+    if (millis() - last > 200)
+    {
+      Serial.print("Touch(");
+      Serial.print(x);
+      Serial.print(", ");
+      Serial.print(y);
+      Serial.println(")");
+      lcd_set_screen_config((enum lcdLayout) ((screenconfig+1) % NUMLAYOUTS));
+    }
+    last = millis();
+  }
+  else
+  {
+    if (millis() - last < 200)
+      Serial.print(".");
+  }
+}
+#endif
+
+uint8_t lcd_read_controllers(uint8_t chan)
+{
+    tft.WriteRegister(RA8875_GPO, ~(1 << chan));
+    return ~tft.ReadRegister(RA8875_GPI);
+}
+
+int16_t lcd_read_joy(uint8_t port)
+{
+  uint8_t v1, v2;
+  uint8_t rtn = 0;
+
+  switch (port)
+  {
+    case 0: // Buttons from both lcd_read_controllers
+      v1 = lcd_read_controllers(0);
+      v2 = lcd_read_controllers(2);
+      rtn = (v1 & 0x0f) | (v2 << 4);
+      break;
+
+    case 1: // controller 1 X-Axis
+      v1 = lcd_read_controllers(1);
+      if (v1 & 0x01)
+        rtn = 126;
+      else if (v1 & 0x2)
+        rtn = -127;
+      break;
+
+    case 2: // controller 1 Y-Axis
+      v1 = lcd_read_controllers(1);
+      if (v1 & 0x04)
+        rtn = 126;
+      else if (v1 & 0x8)
+        rtn = -127;
+      break;
+
+    case 3: // controller 2 X-Axis
+      v1 = lcd_read_controllers(3);
+      if (v1 & 0x01)
+        rtn = 126;
+      else if (v1 & 0x2)
+        rtn = -127;
+      break;
+
+    case 4: // controller 2 Y-Axis
+      v1 = lcd_read_controllers(3);
+      if (v1 & 0x04)
+        rtn = 126;
+      else if (v1 & 0x8)
+        rtn = -127;
+      break;
+  }
+
+  return rtn;
+}
+
+void lcd_setup(void)
 {
   SPIGuard spi;
 
@@ -580,7 +778,19 @@ void lcdSetup(void)
   tft.clearScreen();
 #endif
 
+#if USETOUCH>0
+  tft.useINT(60);
+  tft.touchBegin();
+  tft.enableISR(true);
+#endif
+
   tft.setRotation(TFT_ROTATION);
+
+#if TERMLCD>0
+  lcd_set_screen_config(LAYOUT_TERM_MAIN);
+#else
+  lcd_set_screen_config(LAYOUT_DAZZ);
+#endif
 }
 #endif // DAZZLCD
 #endif

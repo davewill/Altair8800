@@ -75,6 +75,9 @@
 
 // Enables support for Cromemco Dazzler on SPI interfaced LCD. See lcddue.cpp
 #define DAZZLCD 1
+#define USETOUCH 0
+#define TERMLCD 0
+#define JOYLCD 1
 
 // Enables support for Processor Technology VDM-1. Note that to actually see the
 // VDM-1 picture you need to connect to a client. See:

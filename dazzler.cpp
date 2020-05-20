@@ -24,7 +24,6 @@
 #include "serial.h"
 #include "timer.h"
 #include "numsys.h"
-#include "lcddue.h"
 
 #if USE_DAZZLER==0
 
@@ -122,7 +121,9 @@ static void dazzler_send_frame(int buffer_flag, uint16_t addr_old, uint16_t addr
       for(int i=addr_new; i<end; i++)
         if( Mem[i] != Mem[i-d] )
           {
+#if DAZZLCD==1
             dazzler_lcd_draw_byte(i, Mem[i]);
+#endif
 
             b[0] = DAZ_MEMBYTE | buffer_flag | (((i-addr_new) & 0x0700)/256);
             b[1] = i & 255;
@@ -133,7 +134,9 @@ static void dazzler_send_frame(int buffer_flag, uint16_t addr_old, uint16_t addr
     else
     {
       // sending full frame is shorter
+#if DAZZLCD==1
       dazzler_lcd_full_redraw();
+#endif
       dazzler_send_fullframe(buffer_flag, addr_new);
     }
 }
@@ -177,7 +180,9 @@ void dazzler_write_mem_do(uint16_t a, byte v)
   printf("dazzler_write_mem(%04x, %02x)\n", a, v);
 #endif
 
+#if DAZZLCD==1
   dazzler_lcd_draw_byte(a, v);
+#endif
 
   // buffer 1 must be in use if we get here
   if( ((uint16_t) (a-dazzler_mem_addr1))<dazzler_mem_size )
@@ -203,7 +208,9 @@ void dazzler_out_ctrl(byte v)
 {
   byte b[3];
   
+#if DAZZLCD==1
   dazzler_lcd_update_ctrlport(v);
+#endif
   
   b[0] = DAZ_CTRL;
 
@@ -229,7 +236,9 @@ void dazzler_out_ctrl(byte v)
       dazzler_mem_addr1 = 0xFFFF;
       dazzler_mem_addr2 = 0xFFFF;
 
+#if DAZZLCD==1
       dazzler_lcd_clear();
+#endif
 
       v = 0x00;
     }
@@ -239,7 +248,9 @@ void dazzler_out_ctrl(byte v)
       if( dazzler_mem_addr1==0xFFFF )
         {
           // not yet initialized => send full frame
+#if DAZZLCD==1
           dazzler_lcd_full_redraw();
+#endif
           dazzler_send_fullframe(BUFFER1, a);
           dazzler_mem_addr1 = a;
         }
@@ -331,7 +342,9 @@ void dazzler_out_pict(byte v)
   // D3-D0: color info for x4 high res mode
 
 
+#if DAZZLCD==1
   dazzler_lcd_update_pictport(v);
+#endif
 
 #if DEBUGLVL>0
   static byte prev = 0xff;
@@ -547,7 +560,11 @@ byte dazzler_in(byte port)
       // D+7A I/O board
       // The D+7A board was not part of the Dazzler but we include
       // it in the Dazzler emulation to support joysticks
+      #if JOYLCD>0
+      v = lcd_read_joy(port-0030);
+      #else
       v = d7a_port[port-0030];
+      #endif
     }
   
 #if DEBUGLVL>2

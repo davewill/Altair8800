@@ -8,6 +8,7 @@
 
 #include "config.h"
 #include "switch_serial.h"
+#include "lcddue.h"
 #include <SdFat.h>
 
 
@@ -147,8 +148,12 @@ byte host_read_data_leds();
 
 // ---------------------------------------------------- interrupts
 
-// On the Due we are using real interrupts so nothing needs o be done here
+#if USETOUCH>0
+#define host_check_interrupts() { lcdCheckTouch(); }
+#else
+// On the Due we are using real interrupts so nothing needs to be done here
 #define host_check_interrupts() while(0)
+#endif
 
 void host_serial_interrupts_pause();
 void host_serial_interrupts_resume();
