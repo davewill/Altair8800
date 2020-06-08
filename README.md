@@ -1,5 +1,5 @@
 # Altair8800 - LCD Add-on
-This project adds LCD support to David Hansel's wonderful Arduino Altair project. I was unsatisfied with needing various add-on boards that talked to my [Altair-duino](https://www.adwaterandstir.com/altair/) over serial and USB to do terminal emulation, Cromemco Dazzler, and joysticks. Unfortunately, pretty much every single pin on the Arduino Due is already used driving the front panel board, which makes doing new things difficult.
+This project adds LCD support to David Hansel's wonderful Arduino Altair project. I was unsatisfied with needing various add-on processors that talked to my [Altair-duino](https://www.adwaterandstir.com/altair/) over serial and USB to do terminal emulation, Cromemco Dazzler, and joysticks. Unfortunately, pretty much every single pin on the Arduino Due is already used driving the front panel board, which makes doing new things difficult.
 
 However, the board already uses SPI to interface with an SD Card, and I figured that if I freed up another chip select, I could interface an LCD on the same pins. I settled on an 800x480 7" LCD using an RA8875 controller. The RA8875 is great because we get multiple functions on the one device, LCD, resistive touch, and a keyboard matrix.
 
