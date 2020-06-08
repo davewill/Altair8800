@@ -45,11 +45,11 @@ This has barely been started.
 
 ## Keyboard support
 
-The keyscan interface on the RA8875 is only 4x5, which is not nearly enough for any sort of alphanumeric keyboard. The Due can support a USB keyboard plugged into the native USB port, but that's a pretty valuable resource to use for that. It may also be possible to use the SPI pins to do a PS2 keyboard interface when the other two devices are not in use, but PS2 keyboards are not plentiful. I may end up supporting both of these, or looking for some other type of keyboard.
+The keyscan interface on the RA8875 is only 4x5, which is not nearly enough for any sort of alphanumeric keyboard. The Due can support a USB keyboard plugged into the native USB port, but that's a pretty valuable resource to use for that. It would be possible to use use one of the existing software serial port pins (or another chip select and the SPI pins) to do a PS2 keyboard interface, but PS2 keyboards are not plentiful. I may end up supporting both of these, or looking for some other type of keyboard.
 
 ## Game Controler Support
 
-Since the keyscan interface is not useful for an alphanumeric keyboard, I decided to use it for gamepad support instead. Unfortuanely, the automatic keyscan interface only handles three keys pressed at the same time, and does not support separate make and break codes so we can't tell if a button is held down. However, the keyscan pins can also be used a GPIOs, so we can do the scanning of the matrix ourselves.
+Since the keyscan interface is not useful for an alphanumeric keyboard, I decided to use it for gamepad support instead. Unfortuanely, the controller's keyscan interface only handles three keys pressed at the same time, and does not support separate make and break codes so we can't tell if a button is held down. However, the keyscan pins can also be used as GPIOs, so we can do the scanning of the matrix ourselves.
 
 The Cromemco joysticks have two analog axes, and four button inputs. I chose to use SNES controllers with a DPAD to emulate the analog joysticks, and the regular A, B, X, Y buttons for the buttons. Using one row output for the DPAD, and one for the buttons, allows support of two controllers using the four row outputs. Since there are 5 column inputs, when I only need 4, I connected the Start, Select, and R/L Shoulder buttons to them.
 
