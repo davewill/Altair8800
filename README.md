@@ -53,7 +53,7 @@ Since the keyscan interface is not useful for an alphanumeric keyboard, I decide
 
 The Cromemco joysticks have two analog axes, and four button inputs. I chose to use SNES controllers with a DPAD to emulate the analog joysticks, and the regular A, B, X, Y buttons for the buttons. Using one row output for the DPAD, and one for the buttons, allows support of two controllers using the four row outputs. Since there are 5 column inputs, when I only need 4, I connected the Start, Select, and R/L Shoulder buttons to them.
 
-The DPAD emulation simply returns -127,0, and 126 for the analog values. this works great for many games, but others truly expect and need to get a range of analog values. I may add some sort of time based analog joystick emulation, but it would need to be reconfigurable. I will also want to add sending key inputs when gamepad buttons are pressed, so they can be used with games that are keyboard based.
+The DPAD emulation simply returns -127, 0, and 126 for the analog values. this works great for many games, but others truly expect and need to get a range of analog values. I may add some sort of time based analog joystick emulation, but it would need to be reconfigurable. I will also want to add sending key inputs when gamepad buttons are pressed, so they can be used with games that are keyboard based.
 
 ### GamePad Mods
 The original controller is wired to an onboard chip (inside the black blob). It looks something like the diagram below:
