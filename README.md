@@ -56,10 +56,10 @@ The Cromemco joysticks have two analog axes, and four button inputs. I chose to 
 The DPAD emulation simply returns -127, 0, and 126 for the analog values. this works great for many games, but others truly expect and need to get a range of analog values. I may add some sort of time based analog joystick emulation, but it would need to be reconfigurable. I will also want to add sending key inputs when gamepad buttons are pressed, so they can be used with games that are keyboard based.
 
 ### GamePad Mods
-The original controller is wired to an onboard chip (inside the black blob). It looks something like the diagram below:
+The original controller is wired to an onboard chip (inside the black blob). The schematic of the button matrix looks something like the diagram below:
 ![SNES Schematic](https://cdn-learn.adafruit.com/assets/assets/000/000/385/original/gaming_snes.png)
 
-A simpler approach is outlined [Here](https://learn.adafruit.com/usb-snes-gamepad/disassemble-the-snes-controller). Since we don't have 12 separate inputs, we have to use a slightly different circuit. Splitting the buttons into two groups and adding diodes so that we can have n-buttons pressed at the same time.
+Instructions for disassembling the controller are [here](https://learn.adafruit.com/usb-snes-gamepad/disassemble-the-snes-controller). Since we don't have 12 separate inputs, we have to use a slightly different circuit. We split the buttons into two groups, so we can scan them as two rows of the key matrix and add diodes so that we can have n-buttons pressed at the same time.
 
 ![Gamepad](Hardware/Schematic_AltairLCD_Gamepad.png)Schematic of modded controller.
 
