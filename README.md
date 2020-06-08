@@ -26,7 +26,7 @@ I settled on using the 6 pin header next to the SD Card, as it has the entire SP
 ## Interface board on the display controller.
 
 Unfortunately, we can't simply connect the display directly to the Arduino's SPI bus and 3.3v power. The large LCD draws too much power, so I needed a separate supply of 3.3v. Also the RA8875 does not tristate it's transmit pin when not selected, so I needed a tristate buffer in between. Here is the schematic and the fairly ugly board I built.
-![Interface Board](Hardware/Schematic_AltairLCD_IF_Board.svg)
+![Interface Board](Hardware/Schematic_AltairLCD_IF_Board.png)
 ![Interface Board](Hardware/20200607_152418.jpg)
 
 The LCD controller has an SD Card slot, and I wired the interface board to use it, but my latest attempts to use it were unsuccessful. The [RA8875 library Wiki](https://github.com/sumotoy/RA8875/wiki/Working-with-a-SD-card-and-troubleshooting) explains why we may not be able to use it. Since the SD Card on slot on the Altair-duino board works just fine, this is not a big deal.
