@@ -8,7 +8,7 @@
 
 #include <Arduino.h>
 
-extern uint16_t dazzler_mem_start, dazzler_mem_end;
+extern uint16_t dazzler_mem_addr1, dazzler_mem_addr2, dazzler_mem_start, dazzler_mem_end;
 
 #define dazzler_write_mem(a, v) { if( a<dazzler_mem_end && a>=dazzler_mem_start && Mem[a]!=v ) dazzler_write_mem_do(a, v); }
 
@@ -23,5 +23,8 @@ void dazzler_receive(int size, byte *data);
 void dazzler_set_iface(byte iface);
 byte dazzler_get_iface();
 void dazzler_setup();
+
+#define BUFFER1       0x00
+#define BUFFER2       0x08
 
 #endif

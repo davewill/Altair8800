@@ -51,9 +51,6 @@ void dazzler_setup() {}
 #define DAZ_KEY       0x30
 #define DAZ_VSYNC     0x40
 
-#define BUFFER1       0x00
-#define BUFFER2       0x08
-
 #define FEAT_VIDEO    0x01
 #define FEAT_JOYSTICK 0x02
 #define FEAT_DUAL_BUF 0x04
@@ -75,6 +72,7 @@ volatile byte d7a_port[5] = {0xff, 0x00, 0x00, 0x00, 0x00};
 
 static void dazzler_send(const byte *data, uint16_t size)
 {
+  #if DAZZLCD==0
   if( dazzler_iface<0xff )
     {
       size_t n, ptr = 0;
@@ -85,16 +83,19 @@ static void dazzler_send(const byte *data, uint16_t size)
           size -= n;
         }
     }
+    #endif
 }
 
 
 
 static void dazzler_send_fullframe(uint8_t buffer_flag, uint16_t addr)
 {
+  #if DAZZLCD==0
   // send full picture memory
   byte b = DAZ_FULLFRAME | buffer_flag | (dazzler_mem_size > 512 ? 1 : 0);
   dazzler_send(&b, 1);
   dazzler_send(Mem+addr, dazzler_mem_size > 512 ? 2048 : 512);
+  #endif
 }
 
 
@@ -122,20 +123,20 @@ static void dazzler_send_frame(int buffer_flag, uint16_t addr_old, uint16_t addr
         if( Mem[i] != Mem[i-d] )
           {
 #if DAZZLCD==1
-            dazzler_lcd_draw_byte(i, Mem[i]);
-#endif
-
+            dazzler_lcd_draw_byte(buffer_flag, i, Mem[i]);
+#else
             b[0] = DAZ_MEMBYTE | buffer_flag | (((i-addr_new) & 0x0700)/256);
             b[1] = i & 255;
             b[2] = Mem[i];
             dazzler_send(b, 3);
+#endif
           }
     }
     else
     {
       // sending full frame is shorter
 #if DAZZLCD==1
-      dazzler_lcd_full_redraw();
+      dazzler_lcd_full_redraw(buffer_flag, addr_new);
 #endif
       dazzler_send_fullframe(buffer_flag, addr_new);
     }
@@ -144,7 +145,10 @@ static void dazzler_send_frame(int buffer_flag, uint16_t addr_old, uint16_t addr
 
 static void dazzler_check_version()
 {
-  if( dazzler_client_version<0 )
+  #ifdef DAZZLCD
+    dazzler_client_features = FEAT_VIDEO | FEAT_JOYSTICK | FEAT_FRAMEBUF; // | FEAT_DUAL_BUF;
+  #else
+    if( dazzler_client_version<0 )
     {
       // client version not yet determined => send host version to client
       byte b = DAZ_VERSION | (DAZZLER_COMPUTER_VERSION&0x0F);
@@ -170,6 +174,7 @@ static void dazzler_check_version()
       Serial.print(F(" with features 0x")); Serial.println(dazzler_client_features, HEX);
 #endif
     }
+  #endif
 }
 
 void dazzler_write_mem_do(uint16_t a, byte v)
@@ -180,26 +185,31 @@ void dazzler_write_mem_do(uint16_t a, byte v)
   printf("dazzler_write_mem(%04x, %02x)\n", a, v);
 #endif
 
-#if DAZZLCD==1
-  dazzler_lcd_draw_byte(a, v);
-#endif
 
   // buffer 1 must be in use if we get here
   if( ((uint16_t) (a-dazzler_mem_addr1))<dazzler_mem_size )
     {
+    #if DAZZLCD==1
+      dazzler_lcd_draw_byte(BUFFER1, a, v);
+    #else
       b[0] = DAZ_MEMBYTE | BUFFER1 | (((a-dazzler_mem_addr1) & 0x0700)/256);
       b[1] = a & 0xFF;
       b[2] = v;
       dazzler_send(b, 3);
+    #endif
     }
 
   // buffer 2 may or may not be in use
   if( dazzler_mem_addr2!=0xFFFF && ((uint16_t) (a-dazzler_mem_addr2))<dazzler_mem_size )
     {
+    #if DAZZLCD==1
+      dazzler_lcd_draw_byte(BUFFER2, a, v);
+    #else
       b[0] = DAZ_MEMBYTE | BUFFER2 | (((a-dazzler_mem_addr2) & 0x0700)/256);
       b[1] = a & 0xFF;
       b[2] = v;
       dazzler_send(b, 3);
+    #endif
     }
 }
 
@@ -248,26 +258,34 @@ void dazzler_out_ctrl(byte v)
       if( dazzler_mem_addr1==0xFFFF )
         {
           // not yet initialized => send full frame
+          dazzler_mem_addr1 = a;
 #if DAZZLCD==1
-          dazzler_lcd_full_redraw();
+          dazzler_lcd_setlayer(BUFFER1);
+          dazzler_lcd_full_redraw(BUFFER1, a);
 #endif
           dazzler_send_fullframe(BUFFER1, a);
-          dazzler_mem_addr1 = a;
         }
       else if( a!=dazzler_mem_addr1 )
         {
+          uint16_t old_mem = dazzler_mem_addr1;
           // already initialized and different address => send diff
-          dazzler_send_frame(BUFFER1, dazzler_mem_addr1, a);
           dazzler_mem_addr1 = a;
+          dazzler_send_frame(BUFFER1, old_mem, a);
         }
     }
   else if( a==dazzler_mem_addr1 )
     {
+#if DAZZLCD==1
+          dazzler_lcd_setlayer(BUFFER1);
+#endif
       // buffer for this address range is already initialized
       v = 0x80;
     }
   else if( a==dazzler_mem_addr2 )
     {
+#if DAZZLCD==1
+          dazzler_lcd_setlayer(BUFFER2);
+#endif
       // buffer for this address range is already initialized
       v = 0x81;
     }
@@ -275,6 +293,10 @@ void dazzler_out_ctrl(byte v)
     {
       // new address range, buffer 1 is available => use it
       dazzler_mem_addr1 = a;
+#if DAZZLCD==1
+      dazzler_lcd_full_redraw(BUFFER1, a);
+      dazzler_lcd_setlayer(BUFFER1);
+#endif
       dazzler_send_fullframe(BUFFER1, dazzler_mem_addr1);
       v = 0x80;
     }
@@ -282,6 +304,10 @@ void dazzler_out_ctrl(byte v)
     {
       // new address range, buffer 2 is available => use it
       dazzler_mem_addr2 = a;
+#if DAZZLCD==1
+      dazzler_lcd_full_redraw(BUFFER2, a);
+      dazzler_lcd_setlayer(BUFFER2);
+#endif
       dazzler_send_fullframe(BUFFER2, dazzler_mem_addr2);
       v = 0x81;
     }
@@ -291,14 +317,22 @@ void dazzler_out_ctrl(byte v)
       static bool first = true;
       if( first )
         {
-          dazzler_send_frame(BUFFER1, dazzler_mem_addr1, a);
+          uint16_t old_mem = dazzler_mem_addr1;
           dazzler_mem_addr1 = a;
+          dazzler_send_frame(BUFFER1, old_mem, a);
+#if DAZZLCD==1
+      dazzler_lcd_setlayer(BUFFER1);
+#endif
           v = 0x80;
         }
       else
         {
-          dazzler_send_frame(BUFFER2, dazzler_mem_addr2, a);
+          uint16_t old_mem = dazzler_mem_addr2;
           dazzler_mem_addr2 = a;
+          dazzler_send_frame(BUFFER2, dazzler_mem_addr2, a);
+#if DAZZLCD==1
+      dazzler_lcd_setlayer(BUFFER2);
+#endif
           v = 0x81;
         }
 
@@ -385,6 +419,7 @@ void dazzler_out_pict(byte v)
 
 void dazzler_out_dac(byte dacnum, byte v)
 {
+  #if DAZZLCD==0
   static byte     prev_sample[7] = {0, 0, 0, 0, 0, 0, 0};
   static uint32_t prev_sample_cycles[7] = {0, 0, 0, 0, 0, 0, 0};
 
@@ -405,6 +440,7 @@ void dazzler_out_dac(byte dacnum, byte v)
     }
 
   TIMER_ADD_CYCLES(11);
+  #endif
 }
 
 
@@ -419,6 +455,7 @@ inline void set_d7a_port(byte p, byte v)
 
 void dazzler_receive(byte iface, byte data)
 {
+  #if DAZZLCD==0
   static byte state=0, bufdata[3];
 
 #if DEBUGLVL>1
@@ -511,6 +548,7 @@ void dazzler_receive(byte iface, byte data)
       state = 0;
       break;
     }
+    #endif
 }
 
 

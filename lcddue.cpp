@@ -20,6 +20,10 @@
 volatile byte ctrlport = 0x00;
 volatile byte pictport = 0x00;
 
+uint8_t currlayer = BUFFER1;
+boolean layer1dirty = false, layer2dirty = false;
+
+
 #if ILI9341>0
 #include "Adafruit_ILI9341.h"
 
@@ -54,13 +58,15 @@ static uint16_t
 #elif USERA8875>0
 #include <RA8875.h>
 
+#define DEBUGLVL 0
+
 RA8875 tft = RA8875(TFT_CS);
 
 static uint16_t
   pixelWidth  = 800,  // TFT dimensions
   pixelHeight = 480;
 typedef uint16_t pixel_t;
-volatile pixel_t pictcolor = 0xffff;
+volatile pixel_t pictcolor = RA8875_MAGENTA;
 
 #define TFT_ROTATION 0
 #define TOPBAR 0
@@ -93,7 +99,8 @@ void lcd_set_screen_config(enum lcdLayout config)
       dazzWidth = min(pixelHeight*4/3, pixelWidth-SIDEBAR);
       break;
 
-    case LAYOUT_TERM:
+   #if TERMLCD>0
+   case LAYOUT_TERM:
       termEnabled = true;
       dazzEnabled = false;
       termOffsetX = 0;
@@ -129,6 +136,7 @@ void lcd_set_screen_config(enum lcdLayout config)
       termOffsetX = pixelWidth/2;
       termOffsetY = 0;
       break;
+  #endif
 
     default:
       // bad config
@@ -141,7 +149,7 @@ void lcd_set_screen_config(enum lcdLayout config)
     SPIGuard spi;
     tft.clearScreen();
     lcd_term_full_redraw();
-    dazzler_lcd_full_redraw();
+    dazzler_lcd_full_redraw(BUFFER1, dazzler_mem_addr1);
   }
 #endif
 
@@ -194,6 +202,17 @@ void lcd_term_full_redraw()
     tft.setActiveWindow();
   }
   #endif
+}
+
+static void setLayertoWrite(RA8875writes d)
+{
+  static RA8875writes last = L1;
+
+  if (last != d)
+  {
+    last = d;
+    tft.writeTo(d);
+  }
 }
 
 static pixel_t tftColor(uint8_t v)
@@ -324,20 +343,57 @@ printf("tft.drawPixel(%u, %u, %04x)\r\n", x, y, (unsigned int) v);
 
 void dazzler_lcd_update_pictport(uint8_t v)
 {
+  // D7: not used
+  // D6: 1=resolution x4 (single color), 0=normal resolution (multi-color)
+  // D5: 1=2k memory, 0=512byte memory
+  // D4: 1=color, 0=monochrome
+  // D3-D0: color info for x4 high res mode
+
   if (v != pictport) {
     dazzres = ((v & 0x20) ? 64 : 32) * ((v & 0x40) ? 2 : 1);
-    //if ((v&0x40) || (v&0x70 != pictport&0x70))
+    // if ((v&0x40) || (v&0x70 != pictport&0x70))
     {
+      SPIGuard spi;
+      uint8_t old_pp = pictport;
       pictport = v;
-      pictcolor = tftColor(v & 0x0F);
-      dazzler_lcd_full_redraw(1);
+      
+        pictcolor = RA8875_MAGENTA; //tftColor(v & 0x0F);
+      if (v&0x40)
+      {
+        tft.setTransparentColor(RA8875_MAGENTA);
+        setLayertoWrite(L2);
+        tft.fillRect(dazzOffsetX, dazzOffsetY, dazzWidth, dazzHeight, tftColor(v & 0x0F));
+        tft.layerEffect(TRANSPARENT);
+      }
+      else
+      {
+        tft.layerEffect(LAYER1);
+        // pictcolor = tftColor(v & 0x0F);
+      }
+      
+      
+      if ((v&0xF0) != (old_pp&0xF0))
+      {
+        pictport = v;
+        if (currlayer == BUFFER1)
+        {
+          dazzler_lcd_full_redraw(BUFFER1, dazzler_mem_addr1, 1);
+          layer2dirty = true;
+        }
+        else
+        {
+          dazzler_lcd_full_redraw(BUFFER2, dazzler_mem_addr2, 1);
+          layer1dirty = true;
+        }
+      }
+
+
     }
 #if DEBUGLVL>0
-    printf("pictport = %02x, pictcolor = (%02x)\n", pictport, pictcolor);
+    printf("pictport = %02x\n", pictport);
 #endif
   }
 
-  pictport = v;
 }
 
 void dazzler_lcd_update_ctrlport(uint8_t v)
@@ -347,13 +403,15 @@ void dazzler_lcd_update_ctrlport(uint8_t v)
 
 void dazzler_lcd_clear(void)
 {
+  SPIGuard spi;
+
   if (dazzEnabled)
-    tft.fillRect(dazzOffsetX, dazzOffsetY, dazzWidth, dazzWidth, 0);
+    tft.fillRect(dazzOffsetX, dazzOffsetY, dazzWidth, dazzHeight, 0);
 }
 
-void dazzler_lcd_draw_byte(uint16_t a, byte v)
+void dazzler_lcd_draw_byte(uint8_t buffer_flag, uint16_t a, byte v)
 {
-    uint16_t baseaddr = (ctrlport & 0x7f) << 9;
+    uint16_t baseaddr = buffer_flag == BUFFER1 ? dazzler_mem_addr1 : dazzler_mem_addr2;
     int32_t index = (int32_t) a-baseaddr;
     uint8_t x, y;
 
@@ -366,11 +424,31 @@ void dazzler_lcd_draw_byte(uint16_t a, byte v)
   if (faddr < 5)
     printf("dazzler_lcd_draw_byte(%u, %u), faddr = %u\n", a, v, faddr);
 #endif
+
     if ((ctrlport & 0x80) && index >= 0 && index < ((pictport & 0x20) ? 2048 : 512))
     {
-      getXY(index, x, y);
 
-      dazzler_lcd_draw_byte_xy(x, y, v);
+      if (buffer_flag == BUFFER1 && layer1dirty)
+      {
+        dazzler_lcd_full_redraw(BUFFER1, dazzler_mem_addr1);
+        layer1dirty = false;
+      }
+      else if (buffer_flag == BUFFER2 && layer2dirty)
+      {
+        dazzler_lcd_full_redraw(BUFFER2, dazzler_mem_addr1);
+        layer2dirty = false;
+      }
+      else
+      {
+        if (buffer_flag == BUFFER1)
+          setLayertoWrite(L1);
+        else
+          setLayertoWrite(L2);
+
+        getXY(index, x, y);
+
+        dazzler_lcd_draw_byte_xy(x, y, v);
+      }
     }
 }
 
@@ -504,7 +582,7 @@ void dazzler_lcd_full_redraw(boolean colorchangeonly)
   free(pixmap);
 }
 #elif 1
-static void dazzler_lcd_draw_row(uint8_t y, uint16_t addr, pixel_t *pixmap)
+static void dazzler_lcd_draw_row(uint8_t y, uint8_t buffer_flag, uint16_t addr, pixel_t *pixmap)
 {
   uint8_t npix = (pictport & 0x40) ? 4 : 2;
   uint16_t i, j, pmapindex = 0;
@@ -513,6 +591,11 @@ static void dazzler_lcd_draw_row(uint8_t y, uint16_t addr, pixel_t *pixmap)
   #if DEBUGLVL>2
   printf("dazzler_lcd_draw_row(%u, %u, %04x)\r\n", x, y, addr);
   #endif
+
+  if (buffer_flag == BUFFER1)
+    setLayertoWrite(L1);
+  else
+    setLayertoWrite(L2);
 
   if (!(pictport & 0x40))
   {
@@ -584,16 +667,16 @@ static void dazzler_lcd_draw_row(uint8_t y, uint16_t addr, pixel_t *pixmap)
   }
 }
 
-void dazzler_lcd_full_redraw(boolean colorchangeonly)
+void dazzler_lcd_full_redraw(uint8_t buffer_flag, uint16_t addr, boolean colorchangeonly)
 {
-  #if DEBUGLVL>1
-  printf("dazzler_lcd_full_draw()\n");
+  #if DEBUGLVL>0
+  printf("full_draw()\n");
   #endif
 
   if (!dazzEnabled || !(ctrlport & 0x80))
     return;
       
-  int addr = (ctrlport & 0x7f) << 9;
+  //int addr = (ctrlport & 0x7f) << 9;
   uint8_t x, y;
 
   pixel_t *pixmap = (uint16_t *) malloc(dazzWidth*sizeof(pixel_t));
@@ -608,11 +691,11 @@ void dazzler_lcd_full_redraw(boolean colorchangeonly)
         addr += 512;
     }
 
-    dazzler_lcd_draw_row(y, addr, pixmap);
+    dazzler_lcd_draw_row(y, buffer_flag, addr, pixmap);
     if (pictport & 0x40) 
     {
       y++;
-      dazzler_lcd_draw_row(y, addr, pixmap);
+      dazzler_lcd_draw_row(y, buffer_flag, addr, pixmap);
     }
   }
   free(pixmap);
@@ -700,11 +783,21 @@ void lcdCheckTouch(void)
 
 uint8_t lcd_read_controllers(uint8_t chan)
 {
-    tft.WriteRegister(RA8875_GPO, ~(1 << chan));
-    return ~tft.ReadRegister(RA8875_GPI);
+    static uint32_t lastread[] = { 0, 0, 0, 0};
+    static uint32_t lasttime[] = { 0, 0, 0, 0};
+
+    if (millis() - lasttime[chan] > 16)
+    {
+      SPIGuard spi;
+      tft.WriteRegister(RA8875_GPO, ~(1 << chan));
+      lastread[chan] = ~tft.ReadRegister(RA8875_GPI);
+      lasttime[chan] = millis();
+    }
+
+    return lastread[chan];
 }
 
-int16_t lcd_read_joy(uint8_t port)
+byte lcd_read_joy(uint8_t port)
 {
   uint8_t v1, v2;
   uint8_t rtn = 0;
@@ -714,10 +807,10 @@ int16_t lcd_read_joy(uint8_t port)
     case 0: // Buttons from both lcd_read_controllers
       v1 = lcd_read_controllers(0);
       v2 = lcd_read_controllers(2);
-      rtn = (v1 & 0x0f) | (v2 << 4);
+      rtn = ~((v1 & 0x0f) | (v2 << 4));
       break;
 
-    case 1: // controller 1 X-Axis
+    case 2: // controller 1 X-Axis
       v1 = lcd_read_controllers(1);
       if (v1 & 0x01)
         rtn = 126;
@@ -725,15 +818,15 @@ int16_t lcd_read_joy(uint8_t port)
         rtn = -127;
       break;
 
-    case 2: // controller 1 Y-Axis
+    case 1: // controller 1 Y-Axis
       v1 = lcd_read_controllers(1);
-      if (v1 & 0x04)
+      if (v1 & 0x08)
         rtn = 126;
-      else if (v1 & 0x8)
+      else if (v1 & 0x4)
         rtn = -127;
       break;
 
-    case 3: // controller 2 X-Axis
+    case 4: // controller 2 X-Axis
       v1 = lcd_read_controllers(3);
       if (v1 & 0x01)
         rtn = 126;
@@ -741,17 +834,45 @@ int16_t lcd_read_joy(uint8_t port)
         rtn = -127;
       break;
 
-    case 4: // controller 2 Y-Axis
+    case 3: // controller 2 Y-Axis
       v1 = lcd_read_controllers(3);
-      if (v1 & 0x04)
+      if (v1 & 0x08)
         rtn = 126;
-      else if (v1 & 0x8)
+      else if (v1 & 0x4)
         rtn = -127;
       break;
   }
 
   return rtn;
 }
+
+void dazzler_lcd_setlayer(uint8_t buffer_flag)
+{
+  #if DEBUGLVL>0
+  printf("setlayer(%d)\n", buffer_flag);
+  #endif
+  if (buffer_flag == BUFFER1 && layer1dirty)
+  {
+    dazzler_lcd_full_redraw(BUFFER1, dazzler_mem_addr1);
+    layer1dirty = false;
+  }
+  else if (buffer_flag == BUFFER2 && layer2dirty)
+  {
+    dazzler_lcd_full_redraw(BUFFER2, dazzler_mem_addr2);
+    layer2dirty = false;
+  }
+
+  currlayer = buffer_flag;
+  if (pictport & 0x40)
+  {
+    tft.layerEffect(TRANSPARENT);
+  }
+  else
+  {
+    tft.layerEffect(buffer_flag == BUFFER1 ? LAYER1 : LAYER2);
+  }
+}
+
 
 void lcd_setup(void)
 {
@@ -776,6 +897,8 @@ void lcd_setup(void)
 #elif USERA8875>0
   tft.begin(RA8875_800x480,8);
   tft.clearScreen();
+
+  setLayertoWrite(L1);
 #endif
 
 #if USETOUCH>0

@@ -30,14 +30,16 @@ void lcd_set_screen_config(enum lcdLayout config);
 void lcd_term_write(const char *buf, size_t n);
 void lcd_term_full_redraw();
 
-int16_t lcd_read_joy(uint8_t port);
+byte lcd_read_joy(uint8_t port);
 
 void dazzler_lcd_update_pictport(uint8_t v);
 void dazzler_lcd_clear(void);
-void dazzler_lcd_draw_byte(uint16_t a, byte v);
-void dazzler_lcd_full_redraw(boolean colorchangeonly = 0);
+void dazzler_lcd_draw_byte(uint8_t buffer_flag, uint16_t a, byte v);
+void dazzler_lcd_full_redraw(uint8_t buffer_flag, uint16_t addr, boolean colorchangeonly = 0);
 void dazzler_lcd_update_pictport(uint8_t v);
 void dazzler_lcd_update_ctrlport(uint8_t v);
+
+void dazzler_lcd_setlayer(uint8_t buffer_flag);
 #endif
 
 #if USETOUCH>0
