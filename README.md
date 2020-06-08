@@ -57,6 +57,7 @@ The DPAD emulation simply returns -127, 0, and 126 for the analog values. this w
 
 ### GamePad Mods
 The original controller is wired to an onboard chip (inside the black blob). The schematic of the button matrix looks something like the diagram below:
+
 ![SNES Schematic](https://cdn-learn.adafruit.com/assets/assets/000/000/385/original/gaming_snes.png)
 
 Instructions for disassembling the controller are [here](https://learn.adafruit.com/usb-snes-gamepad/disassemble-the-snes-controller). Since we don't have 12 separate inputs, we have to use a slightly different circuit. We split the buttons into two groups, so we can scan them as two rows of the key matrix and add diodes so that we can have n-buttons pressed at the same time.
