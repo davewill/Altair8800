@@ -70,8 +70,7 @@ Then we wire each of the inputs to two diodes which are then connected to the in
 ![Splitting the Common](Hardware/SplitGND.jpg)Splitting the buttons into two rows in the matrix.
 
 
-![Controller Mods](Hardware/20200523_224457.jpg)
-![Controller Mods](Hardware/20200523_224530.jpg)Wiring the button contacts to a DB-9 cable. 
+![Controller Mods](Hardware/20200523_224457.jpg)Wiring the button contacts to a DB-9 cable. 
 
 There's two 10 pin headers that take a standard cable for a motherboard serial to DE-9 connector. They are wired so that KOUT0/1 go to one joystick and KOUT2/3 go to the other. The DB-9 pinout chosen is compatible with a standard Atari joystick, although without the diodes, we could only support one, and the software would have to be changed to map KOUT0/KIN4 to the button port. These modded controllers should NOT be plugged into computers that have Atari joystick ports, however as the rest of the pinout is not compatible.
 
