@@ -63,7 +63,7 @@ A simpler approach is outlined [Here](https://learn.adafruit.com/usb-snes-gamepa
 
 ![Gamepad](Hardware/Schematic_AltairLCD_Gamepad.png)Schematic of modded controller.
 
-We make four cuts. The arrow labeled "1" splits the GND trace so that the buttons are split into two groups, which will will connect to two of the matrix outputs on the RA8875. The cuts labeled "2" disconnect the buttons from the on board controller chip. This may not be necessary as the chip is not powered. 
+We make four cuts. The arrow labeled "1" splits the GND trace (highlighted in red) so that the buttons are split into two groups, which will connect to two of the matrix outputs on the RA8875. The cuts labeled "2" disconnect the buttons from the on board controller chip. This may not be necessary as the chip is not powered. 
 
 Then we wire each of the inputs to two diodes which are then connected to the individual buttons.
 ![Splitting the Common](Hardware/SplitGND.jpg)Splitting the buttons into two rows in the matrix.
@@ -72,7 +72,7 @@ Then we wire each of the inputs to two diodes which are then connected to the in
 ![Controller Mods](Hardware/20200523_224457.jpg)
 ![Controller Mods](Hardware/20200523_224530.jpg)Wiring the button contacts to a DB-9 cable. 
 
-The DB-9 pinout chosen is compatible with a standard Atari joystick, although without the diodes, we could only support one, and the software would have to be changed to map KOUT0/KIN4 to the button port. These modded controllers should NOT be plugged into computers that have Atari joystick ports, however as the rest of the pinout is not compatible.
+There's two 10 pin headers that take a standard cable for a motherboard serial to DE-9 connector. They are wired so that KOUT0/1 go to one joystick and KOUT2/3 go to the other. The DB-9 pinout chosen is compatible with a standard Atari joystick, although without the diodes, we could only support one, and the software would have to be changed to map KOUT0/KIN4 to the button port. These modded controllers should NOT be plugged into computers that have Atari joystick ports, however as the rest of the pinout is not compatible.
 
 ---
 
