@@ -63,7 +63,7 @@ A simpler approach is outlined [Here](https://learn.adafruit.com/usb-snes-gamepa
 
 ![Gamepad](Hardware/Schematic_AltairLCD_Gamepad.png)Schematic of modded controller.
 
-We make four cuts. The arrow labeled "1" splits the GND trace so the the buttons are split into two groups, which will will connect to two of the matrix outputs on the RA8875. The cuts labeled "2" disconnect the buttons from the on board controller chip. This may not be necessary as the chip is not powered. 
+We make four cuts. The arrow labeled "1" splits the GND trace so that the buttons are split into two groups, which will will connect to two of the matrix outputs on the RA8875. The cuts labeled "2" disconnect the buttons from the on board controller chip. This may not be necessary as the chip is not powered. 
 
 Then we wire each of the inputs to two diodes which are then connected to the individual buttons.
 ![Splitting the Common](Hardware/SplitGND.jpg)Splitting the buttons into two rows in the matrix.
