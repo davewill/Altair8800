@@ -49,7 +49,7 @@ The keyscan interface on the RA8875 is only 4x5, which is not nearly enough for 
 
 ## Game Controler Support
 
-Since the keyscan interface is not useful for an alphanumeric keyboard, I decided to use it for gamepad support instead. Unfortuanely, the controller's keyscan interface only handles three keys pressed at the same time, and does not support separate make and break codes so we can't tell if a button is held down. However, the keyscan pins can also be used as GPIOs, so we can do the scanning of the matrix ourselves.
+Since the keyscan interface is not useful for an alphanumeric keyboard, I decided to use it for gamepad support instead. Unfortunately, the controller's keyscan interface only handles three keys pressed at the same time, and does not support separate make and break codes so we can't tell if a button is held down. However, the keyscan pins can also be used as GPIOs, so we can do the scanning of the matrix ourselves.
 
 The Cromemco joysticks have two analog axes, and four button inputs. I chose to use SNES controllers with a DPAD to emulate the analog joysticks, and the regular A, B, X, Y buttons for the buttons. Using one row output for the DPAD, and one for the buttons, allows support of two controllers using the four row outputs. Since there are 5 column inputs, when I only need 4, I connected the Start, Select, and R/L Shoulder buttons to them.
 
